@@ -14,3 +14,4 @@ llm_eval_mutual_funds/data/checkpoints/
 llm_eval_mutual_funds/data/activations/
 llm_eval_mutual_funds/data/probe_results/logs/
 llm_eval_mutual_funds/data/results/
+llm_eval_mutual_funds/logs/
