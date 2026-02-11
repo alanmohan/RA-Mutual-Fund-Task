@@ -1,0 +1,22 @@
+# Core
+numpy>=1.21.0
+pandas>=1.3.0
+torch>=2.0.0
+tqdm>=4.62.0
+
+# Hugging Face (inference + activation extraction)
+transformers>=4.30.0
+accelerate>=0.20.0
+huggingface_hub>=0.16.0
+
+# Linear probing
+scikit-learn>=1.0.0
+scipy>=1.9.0
+
+# Plotting (analyze_lp_results.py)
+matplotlib>=3.5.0
+seaborn>=0.12.0
+
+
+transformer_lens>=1.0.0
+openai>=1.0.0

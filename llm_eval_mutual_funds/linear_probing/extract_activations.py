@@ -6,6 +6,7 @@ This module extracts residual stream activations from transformer models
 for use in linear probing experiments.
 """
 import sys
+import subprocess
 import torch
 import numpy as np
 import pandas as pd
@@ -97,6 +98,43 @@ def get_prompt_builder(condition_name: str) -> Callable:
     if "zeroshot" in condition_name:
         return build_prompt_zero_shot_cot
     raise ValueError(f"Unknown condition: {condition_name}")
+
+
+# ============================================================================
+# MODEL DOWNLOAD CHECK
+# ============================================================================
+
+
+def is_model_downloaded(model_key: str) -> bool:
+    """Return True if the model's local_path exists and contains config.json."""
+    if model_key not in MODELS:
+        return False
+    local_path = MODELS[model_key]["local_path"]
+    resolved = Path(local_path).resolve()
+    return resolved.exists() and (resolved / "config.json").exists()
+
+
+def ensure_models_downloaded(model_key: str) -> None:
+    """
+    If the requested model is not present locally, run download_model.py.
+    The download script fetches all configured models; existing ones are skipped by the Hub.
+    """
+    if is_model_downloaded(model_key):
+        return
+    print(f"Model '{model_key}' not found at {MODELS[model_key]['local_path']}. Running download script...")
+    script = PROJECT_ROOT / "llm_eval_mutual_funds/download_model.py"
+    if not script.exists():
+        raise FileNotFoundError(
+            f"download_model.py not found at {script}. "
+            "Please run it manually from the project root to download models."
+        )
+    subprocess.run(
+        [sys.executable, str(script)],
+        cwd=str(PROJECT_ROOT),
+        check=True,
+    )
+    if not is_model_downloaded(model_key):
+        raise RuntimeError(f"Download script completed but model '{model_key}' still not found at {MODELS[model_key]['local_path']}")
 
 
 # ============================================================================
@@ -399,6 +437,7 @@ def extract_activations(
         torch.cuda.empty_cache()
         gc.collect()
 
+    ensure_models_downloaded(model_key)
     loaded = load_model(model_key, device=actual_device)
 
     if use_transformerlens:

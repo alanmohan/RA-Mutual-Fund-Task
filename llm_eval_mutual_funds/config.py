@@ -29,8 +29,8 @@ RANDOM_STATE = 42
 # ============================================================================
 
 # Generation settings
-MAX_NEW_TOKENS = 16
-BATCH_SIZE = 50  # Adjust based on GPU memory
+MAX_NEW_TOKENS = 512
+BATCH_SIZE = 30  # Adjust based on GPU memory
 
 # Models to test (if using inference.py)
 MODELS = {
@@ -83,22 +83,12 @@ TIE_HANDLING = "exclude"
 CONDITIONS = {
     "1_zeroshot_cot_temp0": {
         "prompt_fn": "build_prompt_zero_shot_cot",
+        "temperature": 0.0,
         "do_sample": False,
     },
     "2_fewshot_cot_temp0": {
         "prompt_fn": "build_prompt_few_shot_cot",
-        "do_sample": False,
-    },
-    "3_zeroshot_cot_topp01": {
-        "prompt_fn": "build_prompt_zero_shot_cot",
-        "temperature": 0.1,
-        "top_p": 0.1,
+        "temperature": 0.0,
         "do_sample": True,
-    },
-    "4_fewshot_cot_topp01": {
-        "prompt_fn": "build_prompt_few_shot_cot",
-        "temperature": 0.1,
-        "top_p": 0.1,
-        "do_sample": True,
-    },
+    }
 }
