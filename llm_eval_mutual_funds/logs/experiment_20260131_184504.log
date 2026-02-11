@@ -1,0 +1,58 @@
+2026-01-31 18:45:04,367 - __main__ - INFO - Logging initialized. Log file: /Users/alanmohan/Desktop/RA Mutual Fund Task/llm_eval_mutual_funds/logs/experiment_20260131_184504.log
+2026-01-31 18:45:04,367 - __main__ - INFO - ======================================================================
+2026-01-31 18:45:04,367 - __main__ - INFO - LLM MUTUAL FUND COMPARISON EXPERIMENT
+2026-01-31 18:45:04,367 - __main__ - INFO - ======================================================================
+2026-01-31 18:45:04,367 - __main__ - INFO - 
+1. Loading data...
+2026-01-31 18:45:04,552 - __main__ - INFO - 
+======================================================================
+2026-01-31 18:45:04,553 - __main__ - INFO - 3. RUNNING EXPERIMENTS: meta-llama/Llama-3.2-3B-Instruct on GPU 0
+2026-01-31 18:45:04,553 - __main__ - INFO - ======================================================================
+2026-01-31 18:45:04,553 - experiment - INFO - Using OpenAI-compatible endpoint for Llama-3.2-3B-Instruct (llama-3.2-3b-instruct)
+2026-01-31 18:45:04,553 - experiment - INFO - 
+============================================================
+2026-01-31 18:45:04,553 - experiment - INFO - Running: Llama-3.2-3B-Instruct - 1_zeroshot_cot_temp0
+2026-01-31 18:45:04,554 - experiment - INFO - ============================================================
+2026-01-31 18:45:04,554 - experiment - INFO -   Starting from scratch
+2026-01-31 18:45:04,554 - experiment - INFO - Building prompts...
+2026-01-31 18:45:04,562 - experiment - INFO - Processing samples 0 to 9...
+2026-01-31 18:45:09,149 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:11,176 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:12,935 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:14,833 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:17,439 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:19,266 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:21,072 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:22,835 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:24,521 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:26,166 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:27,484 - experiment - INFO -   Accuracy: 0.286 (7/10 valid, ties=3)
+2026-01-31 18:45:27,484 - experiment - INFO -   Time: 22.9s (2.29s per sample)
+2026-01-31 18:45:27,493 - experiment - INFO -   Completed 1_zeroshot_cot_temp0
+2026-01-31 18:45:27,493 - experiment - INFO - 
+============================================================
+2026-01-31 18:45:27,494 - experiment - INFO - Running: Llama-3.2-3B-Instruct - 2_fewshot_cot_temp0
+2026-01-31 18:45:27,494 - experiment - INFO - ============================================================
+2026-01-31 18:45:27,494 - experiment - INFO -   Starting from scratch
+2026-01-31 18:45:27,494 - experiment - INFO - Building prompts...
+2026-01-31 18:45:27,495 - experiment - INFO - Processing samples 0 to 9...
+2026-01-31 18:45:30,531 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:32,281 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:33,786 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:35,063 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:36,338 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:37,741 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:39,003 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:40,296 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:41,514 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:42,706 - httpx - INFO - HTTP Request: POST http://127.0.0.1:1234/v1/chat/completions "HTTP/1.1 200 OK"
+2026-01-31 18:45:43,948 - experiment - INFO -   Accuracy: 0.571 (7/10 valid, ties=3)
+2026-01-31 18:45:43,948 - experiment - INFO -   Time: 16.4s (1.64s per sample)
+2026-01-31 18:45:43,953 - experiment - INFO -   Completed 2_fewshot_cot_temp0
+2026-01-31 18:45:43,953 - experiment - INFO - 
+============================================================
+2026-01-31 18:45:43,953 - experiment - INFO - Running: Llama-3.2-3B-Instruct - 3_zeroshot_cot_topp01
+2026-01-31 18:45:43,953 - experiment - INFO - ============================================================
+2026-01-31 18:45:43,953 - experiment - INFO -   Starting from scratch
+2026-01-31 18:45:43,953 - experiment - INFO - Building prompts...
+2026-01-31 18:45:43,954 - experiment - INFO - Processing samples 0 to 9...

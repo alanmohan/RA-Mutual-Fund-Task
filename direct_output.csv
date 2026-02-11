@@ -1,0 +1,11 @@
+pair_index,name_1,name_2,better_fund_response,next_month_response,model
+0,Rydex Telecommunications Fund Class C (RYCSX),Fidelity Select Communication Services Portfolio (FBMPX),mutual fund 2,mutual fund 2,gpt-5.2
+1,Gabelli Media Mogul Fund (MOGLX),Fidelity Select Communication Services Portfolio (FBMPX),mutual fund 2,mutual fund 2,gpt-5.2
+2,Rydex Telecommunications Fund Class A (RYTLX),Fidelity Select Communication Services Portfolio (FBMPX),mutual fund 2,mutual fund 2,gpt-5.2
+3,Rydex Telecommunications Fund Class H (RYMAX),Fidelity Select Communication Services Portfolio (FBMPX),mutual fund 2,mutual fund 2,gpt-5.2
+4,Rydex Telecommunications Fund Class C (RYCSX),T. Rowe Price Communications & Technology Fund Investor Class (PRMTX),mutual fund 2,mutual fund 2,gpt-5.2
+5,Rydex Telecommunications Fund Class Investor (RYMIX),Fidelity Select Communication Services Portfolio (FBMPX),mutual fund 2,mutual fund 2,gpt-5.2
+6,Fidelity Select Communication Services Portfolio (FBMPX),Fidelity Select Wireless Portfolio (FWRLX),mutual fund 1,mutual fund 1,gpt-5.2
+7,Gabelli Media Mogul Fund (MOGLX),Rydex Telecommunications Fund Class C (RYCSX),mutual fund 2,mutual fund 2,gpt-5.2
+8,Gabelli Media Mogul Fund (MOGLX),T. Rowe Price Communications & Technology Fund Investor Class (PRMTX),mutual fund 2,mutual fund 2,gpt-5.2
+9,Rydex Telecommunications Fund Class A (RYTLX),T. Rowe Price Communications & Technology Fund Investor Class (PRMTX),mutual fund 2,mutual fund 2,gpt-5.2

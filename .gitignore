@@ -1,0 +1,16 @@
+.env
+__pycache__/
+*.pyc
+batch_experiments_old/
+batch_experiments_test/
+batch_experiments/
+llm_eval_housing/
+*.pkl
+llm_eval_housing/__pycache__/
+.vscode/
+.DS_Store
+llm_eval_mutual_funds/data/probe_results/*.pkl
+llm_eval_mutual_funds/data/checkpoints/
+llm_eval_mutual_funds/data/activations/
+llm_eval_mutual_funds/data/probe_results/logs/
+llm_eval_mutual_funds/data/results/

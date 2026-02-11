@@ -1,0 +1,28 @@
+2026-01-31 18:23:07,835 - __main__ - INFO - Logging initialized. Log file: /Users/alanmohan/Desktop/RA Mutual Fund Task/llm_eval_mutual_funds/logs/experiment_20260131_182307.log
+2026-01-31 18:23:07,836 - __main__ - INFO - ======================================================================
+2026-01-31 18:23:07,836 - __main__ - INFO - LLM MUTUAL FUND COMPARISON EXPERIMENT
+2026-01-31 18:23:07,836 - __main__ - INFO - ======================================================================
+2026-01-31 18:23:07,836 - __main__ - INFO - 
+1. Loading data...
+2026-01-31 18:23:07,919 - __main__ - INFO - 
+======================================================================
+2026-01-31 18:23:07,920 - __main__ - INFO - 3. RUNNING EXPERIMENTS: meta-llama/Llama-3.2-3B-Instruct on GPU 0
+2026-01-31 18:23:07,920 - __main__ - INFO - ======================================================================
+2026-01-31 18:23:07,920 - experiment - INFO - Using OpenAI-compatible endpoint for Llama-3.2-3B-Instruct (llama-3.2-3b-instruct)
+2026-01-31 18:23:07,920 - experiment - INFO - 
+============================================================
+2026-01-31 18:23:07,920 - experiment - INFO - Running: Llama-3.2-3B-Instruct - 0_baseline_temp0
+2026-01-31 18:23:07,920 - experiment - INFO - ============================================================
+2026-01-31 18:23:07,921 - experiment - INFO -   Resuming from checkpoint at index 99
+2026-01-31 18:23:07,921 - experiment - INFO - Building prompts...
+2026-01-31 18:23:07,928 - experiment - INFO -   Accuracy: 0.621 (29/100 valid, ties=32)
+2026-01-31 18:23:07,928 - experiment - INFO -   Time: 1527.8s (152.78s per sample)
+2026-01-31 18:23:07,932 - __main__ - ERROR - Error running experiments for llama-3.2-3b: cannot access local variable 'checkpoint_data' where it is not associated with a value
+Traceback (most recent call last):
+  File "/Users/alanmohan/Desktop/RA Mutual Fund Task/llm_eval_mutual_funds/main.py", line 102, in main
+    model_results = run_experiment(model_name, sample_df, device=gpu_id, use_dual_gpu=use_dual_gpu)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/alanmohan/Desktop/RA Mutual Fund Task/llm_eval_mutual_funds/experiment.py", line 186, in run_experiment
+    checkpoint_data["completed"] = True
+    ^^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'checkpoint_data' where it is not associated with a value

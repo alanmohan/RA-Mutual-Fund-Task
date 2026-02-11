@@ -1,0 +1,29 @@
+Task: Compare mutual fund 1 vs mutual fund 2 using only the data below and decide which fund will likely deliver a higher return in the next month. Do not use any outside information.
+
+Mutual fund 1:
+Expense Ratio - Net: {expense_ratio_net_1}
+3 Year Sharpe Ratio: {sharpe_3y_1}
+Standard Deviation: {std_dev_1}
+3 Yr: {return_3y_1}
+Beta: {beta_1}
+Manager Tenure: {manager_tenure_1}
+Inception Date: {inception_date_1}
+Assets (Millions): {assets_millions_1}
+Turnover Rates: {turnover_rates_1}
+Load (Y/N): {load_yn_1}
+NTF: {ntf_1}
+
+Mutual fund 2:
+Expense Ratio - Net: {expense_ratio_net_2}
+3 Year Sharpe Ratio: {sharpe_3y_2}
+Standard Deviation: {std_dev_2}
+3 Yr: {return_3y_2}
+Beta: {beta_2}
+Manager Tenure: {manager_tenure_2}
+Inception Date: {inception_date_2}
+Assets (Millions): {assets_millions_2}
+Turnover Rates: {turnover_rates_2}
+Load (Y/N): {load_yn_2}
+NTF: {ntf_2}
+
+Final response: "mutual fund 1" or "mutual fund 2"

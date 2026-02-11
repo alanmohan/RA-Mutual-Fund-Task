@@ -1,0 +1,24 @@
+2026-01-31 17:40:05,230 - __main__ - INFO - Logging initialized. Log file: /Users/alanmohan/Desktop/RA Mutual Fund Task/llm_eval_mutual_funds/logs/experiment_20260131_174005.log
+2026-01-31 17:40:05,230 - __main__ - INFO - ======================================================================
+2026-01-31 17:40:05,230 - __main__ - INFO - LLM MUTUAL FUND COMPARISON EXPERIMENT
+2026-01-31 17:40:05,230 - __main__ - INFO - ======================================================================
+2026-01-31 17:40:05,230 - __main__ - INFO - 
+1. Loading data...
+2026-01-31 17:40:05,319 - __main__ - INFO - 
+======================================================================
+2026-01-31 17:40:05,320 - __main__ - INFO - 3. RUNNING EXPERIMENTS: Qwen/Qwen3-4B-Instruct-2507 on GPU 0
+2026-01-31 17:40:05,320 - __main__ - INFO - ======================================================================
+2026-01-31 17:40:05,320 - experiment - INFO - Loading Qwen3-4B-Instruct-2507 on GPU 0 (once for all conditions)...
+2026-01-31 17:40:05,320 - __main__ - ERROR - Error running experiments for qwen3-4b: Model 'Qwen3-4B-Instruct-2507' not found in /Users/alanmohan/Desktop/RA Mutual Fund Task/llm_eval_mutual_funds/models.
+Please download it first.
+Traceback (most recent call last):
+  File "/Users/alanmohan/Desktop/RA Mutual Fund Task/llm_eval_mutual_funds/main.py", line 102, in main
+    model_results = run_experiment(model_name, sample_df, device=gpu_id, use_dual_gpu=use_dual_gpu)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/alanmohan/Desktop/RA Mutual Fund Task/llm_eval_mutual_funds/experiment.py", line 62, in run_experiment
+    model, tokenizer = load_model(model_name, device=device)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/alanmohan/Desktop/RA Mutual Fund Task/llm_eval_mutual_funds/inference.py", line 62, in load_model
+    raise FileNotFoundError(
+FileNotFoundError: Model 'Qwen3-4B-Instruct-2507' not found in /Users/alanmohan/Desktop/RA Mutual Fund Task/llm_eval_mutual_funds/models.
+Please download it first.
