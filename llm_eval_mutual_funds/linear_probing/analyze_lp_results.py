@@ -20,7 +20,7 @@ FEATURE_LABELS = {
     "sharpe_f1_higher": "Sharpe (Higher)",
     "stdev_f1_lower": "Stdev (Lower)",
     "return_3yr_f1_higher": "3Y Return (Higher)",
-    "beta_f1_closer_to_1": "Beta (Closer to 1)",
+    "beta_f1_lower": "Beta (Lower)",
     "tenure_f1_longer": "Tenure (Longer)",
     "inception_f1_older": "Inception (Older)",
     "assets_f1_higher": "Assets (Higher)",
@@ -35,7 +35,7 @@ FEATURE_ORDER = [
     "sharpe_f1_higher",
     "stdev_f1_lower",
     "return_3yr_f1_higher",
-    "beta_f1_closer_to_1",
+    "beta_f1_lower",
     "tenure_f1_longer",
     "inception_f1_older",
     "assets_f1_higher",
@@ -163,8 +163,9 @@ def plot_accuracy_curves(df: pd.DataFrame, model: str, output_dir: Path, figsize
     return output_path
 
 
-def plot_best_layer_comparison(results, output_dir: Path, figsize=(13, 6)):
-    fig, axes = plt.subplots(1, 2, figsize=figsize)
+def plot_best_layer_comparison(results, output_dir: Path, figsize=(12, 10)):
+    fig, axes = plt.subplots(2, 1, figsize=figsize)
+    plt.subplots_adjust(hspace=0.35)
 
     models = list(results.keys())
     features = [f for f in FEATURE_ORDER if f != "medalist_f1_higher"]
@@ -248,7 +249,7 @@ def plot_best_layer_comparison(results, output_dir: Path, figsize=(13, 6)):
         gap = input_acc - medalist_acc
         ax2.annotate(f"Gap: {gap:.1%}", xy=(i, (input_acc + medalist_acc) / 2), fontsize=10, fontweight="bold", color="#8E44AD")
 
-    plt.tight_layout()
+    plt.tight_layout(pad=1.2)
     output_path = output_dir / "best_layer_comparison.png"
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close()

@@ -21,7 +21,7 @@ LOG_DIR = PROJECT_ROOT / "logs"
 CHECKPOINT_INTERVAL = 100  # Save checkpoint every N samples
 
 # Sampling
-SAMPLE_SIZE = 10  # Change this to run on different sample sizes (default: 10 for testing)
+SAMPLE_SIZE = 1000  # Change this to run on different sample sizes (default: 10 for testing)
 RANDOM_STATE = 42
 
 # ============================================================================
@@ -29,14 +29,14 @@ RANDOM_STATE = 42
 # ============================================================================
 
 # Generation settings
-MAX_NEW_TOKENS = 512
-BATCH_SIZE = 30  # Adjust based on GPU memory
+MAX_NEW_TOKENS = 2048
+BATCH_SIZE = 32  # Adjust based on GPU memory
 
 # Models to test (if using inference.py)
 MODELS = {
     # Default to Llama only (LM Studio endpoint). Add Qwen here if you have it locally.
-    "llama-3.2-3b": "meta-llama/Llama-3.2-3B-Instruct",
-    # "qwen3-4b": "Qwen/Qwen3-4B-Instruct-2507",
+    # "llama-3.2-3b": "meta-llama/Llama-3.2-3B-Instruct",
+    "qwen3-4b": "Qwen/Qwen3-4B-Instruct-2507",
 }
 
 # Local model cache directory
@@ -83,12 +83,12 @@ TIE_HANDLING = "exclude"
 CONDITIONS = {
     "1_zeroshot_cot_temp0": {
         "prompt_fn": "build_prompt_zero_shot_cot",
-        "temperature": 0.0,
+        "temperature": 0.1,
         "do_sample": False,
     },
     "2_fewshot_cot_temp0": {
         "prompt_fn": "build_prompt_few_shot_cot",
-        "temperature": 0.0,
-        "do_sample": True,
+        "temperature": 0.1,
+        "do_sample": False,
     }
 }

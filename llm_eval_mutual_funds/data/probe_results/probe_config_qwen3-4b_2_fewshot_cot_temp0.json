@@ -1,7 +1,7 @@
 {
-  "model_name": "llama-3.2-3b",
+  "model_name": "qwen3-4b",
   "condition": "2_fewshot_cot_temp0",
-  "timestamp": "2026-02-11T05:41:33.901813",
+  "timestamp": "2026-02-11T06:18:02.526227",
   "train_ratio": 0.7,
   "val_ratio": 0.1,
   "test_ratio": 0.2,
@@ -10,6 +10,6 @@
   "confidence_level": 0.95,
   "significance_threshold": 0.05,
   "n_samples": 5000,
-  "n_layers": 28,
-  "d_model": 3072
+  "n_layers": 36,
+  "d_model": 2560
 }
