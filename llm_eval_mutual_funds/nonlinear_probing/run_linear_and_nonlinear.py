@@ -7,6 +7,7 @@ Uses linear_probing for linear probes and config; lives in nonlinear_probing/.
 """
 import argparse
 import pickle
+import sys
 import importlib.util
 from pathlib import Path
 
@@ -24,11 +25,12 @@ PROBE_RESULTS_DIR = lp_config_mod.PROBE_RESULTS_DIR
 ACTIVATIONS_DIR = lp_config_mod.ACTIVATIONS_DIR
 MODELS = lp_config_mod.MODELS
 
-# Linear probe module
+# Linear probe module (register in sys.modules so pickle and nonlinear_probe use the same module)
 probe_spec = importlib.util.spec_from_file_location(
     "probe", str(_LINEAR_PROBING_DIR / "probe.py")
 )
 probe_mod = importlib.util.module_from_spec(probe_spec)
+sys.modules["probe"] = probe_mod
 probe_spec.loader.exec_module(probe_mod)
 
 # lp_utils for load_activations
@@ -39,7 +41,14 @@ lp_utils_mod = importlib.util.module_from_spec(lp_utils_spec)
 lp_utils_spec.loader.exec_module(lp_utils_mod)
 load_activations = lp_utils_mod.load_activations
 
-# Nonlinear probe module (this folder)
+# Nonlinear probe module and config (this folder)
+nlp_config_spec = importlib.util.spec_from_file_location(
+    "nlp_config", str(_THIS_DIR / "nlp_config.py")
+)
+nlp_config_mod = importlib.util.module_from_spec(nlp_config_spec)
+nlp_config_spec.loader.exec_module(nlp_config_mod)
+SKIP_LINEAR_PROBING = getattr(nlp_config_mod, "SKIP_LINEAR_PROBING", False)
+
 nonlinear_spec = importlib.util.spec_from_file_location(
     "nonlinear_probe", str(_THIS_DIR / "nonlinear_probe.py")
 )
@@ -76,22 +85,26 @@ def main():
     feature_labels = data["feature_labels"]
     labels = data["labels"]
 
-    # ---------- Linear probes: always ALL layers (unaffected by nonlinear layer config) ----------
-    probe_mod.print_banner("Linear probes (all layers)")
-    linear_experiment = probe_mod.run_probing_experiment(
-        activations=activations,
-        feature_labels=feature_labels,
-        ground_truth_labels=labels,
-        model_name=args.model,
-        condition=args.condition,
-        features_to_probe=args.features,
-        output_dir=output_dir,
-        logger=logger,
-    )
-    linear_pickle = output_dir / f"probe_{args.model}_{args.condition}.pkl"
-    linear_experiment.save(linear_pickle)
-    probe_mod.export_results_to_csv(linear_experiment, output_dir)
-    probe_mod.export_config(linear_experiment, output_dir)
+    linear_experiment = None
+    if not SKIP_LINEAR_PROBING:
+        # ---------- Linear probes: always ALL layers (unaffected by nonlinear layer config) ----------
+        probe_mod.print_banner("Linear probes (all layers)")
+        linear_experiment = probe_mod.run_probing_experiment(
+            activations=activations,
+            feature_labels=feature_labels,
+            ground_truth_labels=labels,
+            model_name=args.model,
+            condition=args.condition,
+            features_to_probe=args.features,
+            output_dir=output_dir,
+            logger=logger,
+        )
+        linear_pickle = output_dir / f"probe_{args.model}_{args.condition}.pkl"
+        linear_experiment.save(linear_pickle)
+        probe_mod.export_results_to_csv(linear_experiment, output_dir)
+        probe_mod.export_config(linear_experiment, output_dir)
+    else:
+        logger.info("Skipping linear probing (SKIP_LINEAR_PROBING=True in nlp_config.py)")
 
     # ---------- Nonlinear probes + control (shuffled labels): layers from nlp_config ----------
     nonlinear_mod.print_banner("Nonlinear probes (layers from nlp_config) + control tasks")
@@ -135,7 +148,8 @@ def main():
         logger.warning(f"Comparison plotting failed: {e}")
 
     probe_mod.print_banner("Pipeline complete")
-    logger.info(f"Linear results: {output_dir}")
+    if linear_experiment is not None:
+        logger.info(f"Linear results: {output_dir}")
     logger.info(f"Nonlinear results: {nonlinear_dir}")
     logger.info(f"Plots: {plots_dir}")
     return 0

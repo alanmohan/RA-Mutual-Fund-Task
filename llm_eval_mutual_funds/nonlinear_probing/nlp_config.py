@@ -8,6 +8,10 @@ from pathlib import Path
 # ============================================================================
 # NONLINEAR PROBE SETTINGS
 # ============================================================================
+# If True, run_linear_and_nonlinear.py skips linear probing and runs only nonlinear + control.
+# Default False: run both linear and nonlinear (and control).
+SKIP_LINEAR_PROBING = False
+
 # Layers to run nonlinear (MLP) probes on. Saves time vs running on all layers.
 # None = all layers; or a list of layer indices, e.g. [0, 5, 10, 15, 20, 25]
 # This does NOT affect linear probes (they always run on every layer).

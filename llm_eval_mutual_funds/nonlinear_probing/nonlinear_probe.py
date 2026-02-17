@@ -36,12 +36,16 @@ lp_utils = importlib.util.spec_from_file_location(
 lp_utils_mod = importlib.util.module_from_spec(lp_utils)
 lp_utils.loader.exec_module(lp_utils_mod)
 
-# Import from probe.py (linear) for shared types and helpers
-probe_module_path = _LINEAR_PROBING_DIR / "probe.py"
-spec = importlib.util.spec_from_file_location("probe", str(probe_module_path))
-probe_mod = importlib.util.module_from_spec(spec)
-sys.modules["probe"] = probe_mod
-spec.loader.exec_module(probe_mod)
+# Import from probe.py (linear) for shared types and helpers.
+# Reuse sys.modules["probe"] if already loaded (e.g. by run_linear_and_nonlinear) so pickle works.
+if "probe" in sys.modules:
+    probe_mod = sys.modules["probe"]
+else:
+    probe_module_path = _LINEAR_PROBING_DIR / "probe.py"
+    spec = importlib.util.spec_from_file_location("probe", str(probe_module_path))
+    probe_mod = importlib.util.module_from_spec(spec)
+    sys.modules["probe"] = probe_mod
+    spec.loader.exec_module(probe_mod)
 
 ProbeResult = probe_mod.ProbeResult
 ProbeExperiment = probe_mod.ProbeExperiment
