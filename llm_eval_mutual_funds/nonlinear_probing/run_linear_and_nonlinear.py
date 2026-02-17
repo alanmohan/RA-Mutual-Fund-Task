@@ -64,6 +64,7 @@ def main():
     parser.add_argument("--condition", "-c", type=str, required=True)
     parser.add_argument("--output-dir", "-o", type=str, default=None)
     parser.add_argument("--features", type=str, nargs="+", default=None)
+    parser.add_argument("--no-gpu", action="store_true", help="Disable GPU (cuML) for probes")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir) if args.output_dir else PROBE_RESULTS_DIR
@@ -108,6 +109,7 @@ def main():
 
     # ---------- Nonlinear probes + control (shuffled labels): layers from nlp_config ----------
     nonlinear_mod.print_banner("Nonlinear probes (layers from nlp_config) + control tasks")
+    use_gpu = not args.no_gpu
     nonlinear_experiment, control_experiment = nonlinear_mod.run_nonlinear_probing_experiment(
         activations=activations,
         feature_labels=feature_labels,
@@ -117,6 +119,7 @@ def main():
         features_to_probe=args.features,
         output_dir=nonlinear_dir,
         logger=logger,
+        use_gpu=use_gpu,
     )
     nonlinear_pickle = nonlinear_dir / f"probe_nonlinear_{args.model}_{args.condition}.pkl"
     with open(nonlinear_pickle, "wb") as f:

@@ -19,6 +19,13 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, roc_auc_score
 import warnings
 
+try:
+    import cuml
+    from cuml.preprocessing import StandardScaler as cuStandardScaler
+    CUML_AVAILABLE = True
+except ImportError:
+    CUML_AVAILABLE = False
+
 import importlib.util
 
 _THIS_DIR = Path(__file__).parent.resolve()
@@ -111,12 +118,33 @@ def train_and_evaluate_nonlinear_probe(
     max_epochs: int = NONLINEAR_PROBE_MAX_EPOCHS,
     patience: int = NONLINEAR_PROBE_EARLY_STOPPING_PATIENCE,
     random_state: int = NONLINEAR_PROBE_RANDOM_STATE,
+    use_gpu: bool = True,
 ) -> Dict[str, Any]:
-    """Train an MLP probe and return metrics (same structure as linear probe for compatibility)."""
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_val_scaled = scaler.transform(X_val)
-    X_test_scaled = scaler.transform(X_test)
+    """Train an MLP probe and return metrics (same structure as linear probe for compatibility).
+    When use_gpu and cuML are available, scaling is done on GPU; MLP runs on CPU (cuML has no MLPClassifier)."""
+    use_cuml = use_gpu and CUML_AVAILABLE
+
+    if use_cuml:
+        import cupy as cp
+        cuml_logger = logging.getLogger("cuml")
+        original_level = cuml_logger.level
+        cuml_logger.setLevel(logging.ERROR)
+        try:
+            scaler = cuStandardScaler()
+            X_train_gpu = cp.asarray(X_train.astype(np.float32))
+            X_val_gpu = cp.asarray(X_val.astype(np.float32))
+            X_test_gpu = cp.asarray(X_test.astype(np.float32))
+            scaler.fit(X_train_gpu)
+            X_train_scaled = np.asarray(scaler.transform(X_train_gpu), dtype=np.float64)
+            X_val_scaled = np.asarray(scaler.transform(X_val_gpu), dtype=np.float64)
+            X_test_scaled = np.asarray(scaler.transform(X_test_gpu), dtype=np.float64)
+        finally:
+            cuml_logger.setLevel(original_level)
+    else:
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_val_scaled = scaler.transform(X_val)
+        X_test_scaled = scaler.transform(X_test)
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=UserWarning)
@@ -198,6 +226,7 @@ def probe_layer_nonlinear(
     split_indices: Dict[str, np.ndarray],
     feature_name: str = "target",
     logger: Optional[logging.Logger] = None,
+    use_gpu: bool = True,
 ) -> ProbeResult:
     """Run nonlinear (MLP) probe for one layer and one feature."""
     X = activations[:, layer, :]
@@ -250,6 +279,7 @@ def probe_layer_nonlinear(
         y_val.astype(int),
         X_test,
         y_test.astype(int),
+        use_gpu=use_gpu,
     )
 
     return ProbeResult(
@@ -290,6 +320,7 @@ def run_nonlinear_probing_experiment(
     features_to_probe: List[str] = None,
     output_dir: Path = None,
     logger: logging.Logger = None,
+    use_gpu: bool = True,
 ) -> tuple:
     """Run nonlinear (MLP) probing on configured layers only, plus control (shuffled labels).
     Returns (experiment, control_experiment). Linear probes are unaffected."""
@@ -311,6 +342,12 @@ def run_nonlinear_probing_experiment(
     logger.info(f"Condition: {condition}")
     logger.info(f"Layers to probe: {layers_to_run} (config: NONLINEAR_PROBE_LAYERS)")
     logger.info(f"Features: {features_to_probe}")
+    if use_gpu and CUML_AVAILABLE:
+        logger.info("Nonlinear probes: GPU acceleration ENABLED (cuML for scaling)")
+    else:
+        logger.info(
+            "Nonlinear probes: GPU acceleration DISABLED (cuML unavailable or use_gpu=False)"
+        )
     logger.info("Control task: shuffled labels (same activations) for selectivity check")
 
     gt_for_split = np.where(np.isnan(ground_truth_labels), 0, ground_truth_labels).astype(int)
@@ -349,6 +386,7 @@ def run_nonlinear_probing_experiment(
                 split_indices=split_indices,
                 feature_name=feature,
                 logger=logger,
+                use_gpu=use_gpu,
             )
             results.append(result)
             control_result = probe_layer_nonlinear(
@@ -358,6 +396,7 @@ def run_nonlinear_probing_experiment(
                 split_indices=split_indices,
                 feature_name=feature,
                 logger=logger,
+                use_gpu=use_gpu,
             )
             control_results.append(control_result)
             if result.is_significant and result.test_accuracy > 0.55:
