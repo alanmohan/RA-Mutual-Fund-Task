@@ -48,6 +48,7 @@ nlp_config_spec = importlib.util.spec_from_file_location(
 nlp_config_mod = importlib.util.module_from_spec(nlp_config_spec)
 nlp_config_spec.loader.exec_module(nlp_config_mod)
 SKIP_LINEAR_PROBING = getattr(nlp_config_mod, "SKIP_LINEAR_PROBING", False)
+NONLINEAR_PROBE_FEATURES = getattr(nlp_config_mod, "NONLINEAR_PROBE_FEATURES", None)
 
 nonlinear_spec = importlib.util.spec_from_file_location(
     "nonlinear_probe", str(_THIS_DIR / "nonlinear_probe.py")
@@ -64,7 +65,6 @@ def main():
     parser.add_argument("--condition", "-c", type=str, required=True)
     parser.add_argument("--output-dir", "-o", type=str, default=None)
     parser.add_argument("--features", type=str, nargs="+", default=None)
-    parser.add_argument("--no-gpu", action="store_true", help="Disable GPU (cuML) for probes")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir) if args.output_dir else PROBE_RESULTS_DIR
@@ -72,6 +72,9 @@ def main():
     nonlinear_dir = output_dir / "nonlinear"
     plots_dir = output_dir / "plots"
     plots_dir.mkdir(parents=True, exist_ok=True)
+
+    # Resolve feature list: CLI --features overrides; else config NONLINEAR_PROBE_FEATURES; else None (all)
+    features_to_probe = args.features if args.features else NONLINEAR_PROBE_FEATURES
 
     logger = probe_mod.setup_logging(output_dir, args.model, args.condition)
     activation_path = ACTIVATIONS_DIR / f"{args.model}_{args.condition}_activations.npz"
@@ -96,7 +99,7 @@ def main():
             ground_truth_labels=labels,
             model_name=args.model,
             condition=args.condition,
-            features_to_probe=args.features,
+            features_to_probe=features_to_probe,
             output_dir=output_dir,
             logger=logger,
         )
@@ -109,17 +112,15 @@ def main():
 
     # ---------- Nonlinear probes + control (shuffled labels): layers from nlp_config ----------
     nonlinear_mod.print_banner("Nonlinear probes (layers from nlp_config) + control tasks")
-    use_gpu = not args.no_gpu
     nonlinear_experiment, control_experiment = nonlinear_mod.run_nonlinear_probing_experiment(
         activations=activations,
         feature_labels=feature_labels,
         ground_truth_labels=labels,
         model_name=args.model,
         condition=args.condition,
-        features_to_probe=args.features,
+        features_to_probe=features_to_probe,
         output_dir=nonlinear_dir,
         logger=logger,
-        use_gpu=use_gpu,
     )
     nonlinear_pickle = nonlinear_dir / f"probe_nonlinear_{args.model}_{args.condition}.pkl"
     with open(nonlinear_pickle, "wb") as f:

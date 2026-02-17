@@ -12,6 +12,12 @@ from pathlib import Path
 # Default False: run both linear and nonlinear (and control).
 SKIP_LINEAR_PROBING = False
 
+# Features to run nonlinear (and linear, when --features not passed) probes on.
+# None = use all features (from linear_probing lp_config.PROBE_FEATURES).
+# A list of feature names = probe only those features, e.g. ["beta_f1_lower", "volatility_f1_lower"].
+# CLI --features overrides this when provided.
+NONLINEAR_PROBE_FEATURES = None  # Set to e.g. ["beta_f1_lower", "volatility_f1_lower"] to probe a subset
+
 # Layers to run nonlinear (MLP) probes on. Saves time vs running on all layers.
 # None = all layers; or a list of layer indices, e.g. [0, 5, 10, 15, 20, 25]
 # This does NOT affect linear probes (they always run on every layer).
