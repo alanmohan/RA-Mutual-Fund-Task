@@ -81,7 +81,7 @@ PROBE_FEATURES = [
     "sharpe_f1_higher",
     "stdev_f1_lower",
     "return_3yr_f1_higher",
-    "beta_f1_lower",  # B1 < B2 (linear); use beta_f1_closer_to_1 for "closer to 1"
+    "beta_f1_lower",
     "tenure_f1_longer",
     "inception_f1_older",
     "assets_f1_higher",

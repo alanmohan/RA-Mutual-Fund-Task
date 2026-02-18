@@ -104,16 +104,7 @@ def create_feature_labels(df: pd.DataFrame) -> pd.DataFrame:
     # Beta
     b_1 = df["Beta_1"].apply(safe_float)
     b_2 = df["Beta_2"].apply(safe_float)
-    # Linear comparison: fund 1 beta lower than fund 2 (easy for linear probe)
     labels["beta_f1_lower"] = [compare(a, b, a < b) for a, b in zip(b_1, b_2)]
-    # Nonlinear: fund 1 beta closer to 1 (kept for optional use)
-    beta_closer = []
-    for a, b in zip(b_1, b_2):
-        if pd.isna(a) or pd.isna(b):
-            beta_closer.append(np.nan)
-        else:
-            beta_closer.append(1 if abs(a - 1.0) < abs(b - 1.0) else 0)
-    labels["beta_f1_closer_to_1"] = beta_closer
 
     # Manager tenure (longer is better)
     t_1 = df["Manager Tenure_1"].apply(safe_years)
@@ -235,7 +226,6 @@ def create_feature_raw_values(df: pd.DataFrame) -> Dict[str, tuple]:
     b_1 = np.array(df["Beta_1"].apply(safe_float))
     b_2 = np.array(df["Beta_2"].apply(safe_float))
     out["beta_f1_lower"] = (b_1, b_2)
-    out["beta_f1_closer_to_1"] = (b_1, b_2)
 
     t_1 = np.array(df["Manager Tenure_1"].apply(safe_years))
     t_2 = np.array(df["Manager Tenure_2"].apply(safe_years))

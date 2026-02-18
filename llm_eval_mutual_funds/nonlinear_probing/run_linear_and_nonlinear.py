@@ -91,6 +91,7 @@ def main():
     feature_raw_values = data.get("feature_raw_values")
 
     linear_experiment = None
+    linear_pickle = output_dir / f"probe_{args.model}_{args.condition}.pkl"
     if not SKIP_LINEAR_PROBING:
         # ---------- Linear probes: always ALL layers (unaffected by nonlinear layer config) ----------
         probe_mod.print_banner("Linear probes (all layers)")
@@ -104,14 +105,21 @@ def main():
             output_dir=output_dir,
             logger=logger,
         )
-        linear_pickle = output_dir / f"probe_{args.model}_{args.condition}.pkl"
         linear_experiment.save(linear_pickle)
         probe_mod.export_results_to_csv(linear_experiment, output_dir)
         probe_mod.export_config(linear_experiment, output_dir)
     else:
         logger.info("Skipping linear probing (SKIP_LINEAR_PROBING=True in nlp_config.py)")
+        if linear_pickle.exists():
+            try:
+                linear_experiment = probe_mod.ProbeExperiment.load(linear_pickle)
+                logger.info(f"Loaded existing linear results from {linear_pickle} for comparison plots")
+            except Exception as e:
+                logger.warning(f"Could not load linear results from {linear_pickle}: {e}")
+        else:
+            logger.info(f"No existing linear results at {linear_pickle}; comparison plots will omit linear")
 
-    # ---------- Nonlinear probes + control (shuffled labels): layers from nlp_config ----------
+    # ---------- Nonlinear probes + control (Scrambled Hierarchy or shuffled): layers from nlp_config ----------
     nonlinear_mod.print_banner("Nonlinear probes (layers from nlp_config) + control tasks")
     nonlinear_experiment, control_experiment = nonlinear_mod.run_nonlinear_probing_experiment(
         activations=activations,

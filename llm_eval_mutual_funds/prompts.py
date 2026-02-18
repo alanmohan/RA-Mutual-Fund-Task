@@ -12,14 +12,6 @@ PROMPT_DIR = PROJECT_ROOT / "prompts"
 ZERO_SHOT_TEMPLATE = (PROMPT_DIR / "zero_shot_prompt_template.txt").read_text(encoding="utf-8")
 SINGLE_SHOT_TEMPLATE = (PROMPT_DIR / "single_shot_prompt_template.txt").read_text(encoding="utf-8")
 
-def _distance_to_market(beta_val) -> str:
-    """Format |beta - 1| for prompt; helps linear probe for 'closer to 1'."""
-    try:
-        b = float(beta_val)
-        return f"{abs(b - 1.0):.3f}"
-    except (TypeError, ValueError):
-        return "NA"
-
 def _build_values(row) -> dict:
     """
     Map dataset fields to prompt template placeholders.
@@ -33,7 +25,6 @@ def _build_values(row) -> dict:
         "std_dev_1": clean_str(row["Standard Deviation_1"]),
         "return_3y_1": clean_str(row["3 Yr_1"]),
         "beta_1": clean_str(row["Beta_1"]),
-        "distance_to_1_1": _distance_to_market(row["Beta_1"]),
         "manager_tenure_1": clean_str(row["Manager Tenure_1"]),
         "inception_date_1": clean_str(row["Inception Date_1"]),
         "assets_millions_1": clean_str(row["Assets (Millions)_1"]),
@@ -45,7 +36,6 @@ def _build_values(row) -> dict:
         "std_dev_2": clean_str(row["Standard Deviation_2"]),
         "return_3y_2": clean_str(row["3 Yr_2"]),
         "beta_2": clean_str(row["Beta_2"]),
-        "distance_to_1_2": _distance_to_market(row["Beta_2"]),
         "manager_tenure_2": clean_str(row["Manager Tenure_2"]),
         "inception_date_2": clean_str(row["Inception Date_2"]),
         "assets_millions_2": clean_str(row["Assets (Millions)_2"]),

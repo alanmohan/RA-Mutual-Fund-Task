@@ -6,7 +6,6 @@ Expense Ratio - Net: {expense_ratio_net_1}
 Standard Deviation: {std_dev_1}
 3 Yr: {return_3y_1}
 Beta: {beta_1}
-Distance to Market (|Beta-1|): {distance_to_1_1}
 Manager Tenure: {manager_tenure_1}
 Inception Date: {inception_date_1}
 Assets (Millions): {assets_millions_1}
@@ -20,7 +19,6 @@ Expense Ratio - Net: {expense_ratio_net_2}
 Standard Deviation: {std_dev_2}
 3 Yr: {return_3y_2}
 Beta: {beta_2}
-Distance to Market (|Beta-1|): {distance_to_1_2}
 Manager Tenure: {manager_tenure_2}
 Inception Date: {inception_date_2}
 Assets (Millions): {assets_millions_2}
