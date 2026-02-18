@@ -64,6 +64,7 @@ TOKEN_POSITION = lp_config.TOKEN_POSITION
 PROJECT_ROOT = lp_config.PROJECT_ROOT
 
 create_feature_labels = lp_utils.create_feature_labels
+create_feature_raw_values = lp_utils.create_feature_raw_values
 save_activations = lp_utils.save_activations
 save_checkpoint = lp_utils.save_checkpoint
 load_latest_checkpoint = lp_utils.load_latest_checkpoint
@@ -454,6 +455,7 @@ def extract_activations(
     # Create feature labels and target labels (Medalist)
     feature_labels = create_feature_labels(data)
     labels = feature_labels["medalist_f1_higher"].values.copy()
+    feature_raw_values = create_feature_raw_values(data)
 
     # Check for existing checkpoint
     start_idx = 0
@@ -623,6 +625,7 @@ def main():
         feature_labels=feature_labels,
         path=output_path,
         metadata=metadata,
+        feature_raw_values=feature_raw_values,
     )
 
     print_banner("Extraction Complete!")

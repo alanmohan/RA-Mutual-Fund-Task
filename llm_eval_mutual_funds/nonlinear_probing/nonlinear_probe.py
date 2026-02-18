@@ -84,9 +84,35 @@ NONLINEAR_PROBE_RANDOM_STATE = nlp_config_mod.NONLINEAR_PROBE_RANDOM_STATE
 CONTROL_TASK_SEED = getattr(nlp_config_mod, "CONTROL_TASK_SEED", 42)
 
 
+def _scrambled_hierarchy_control_labels(
+    value_1: np.ndarray,
+    value_2: np.ndarray,
+    seed: int,
+) -> np.ndarray:
+    """Scrambled Hierarchy control: assign random hidden ranks to unique values, then
+    Control_Label = True iff Rank(Fund1_value) < Rank(Fund2_value). Preserves transitivity
+    but removes the real mathematical ordering. Reproducible via seed."""
+    n = len(value_1)
+    out = np.full(n, np.nan, dtype=np.float64)
+    valid = (~np.isnan(value_1)) & (~np.isnan(value_2))
+    if not np.any(valid):
+        return out
+    unique_vals = np.unique(np.concatenate([value_1[valid], value_2[valid]]))
+    rng = np.random.RandomState(seed)
+    hidden_rank = np.arange(1, len(unique_vals) + 1, dtype=np.float64)
+    rng.shuffle(hidden_rank)
+    value_to_rank = {v: r for v, r in zip(unique_vals, hidden_rank)}
+    for i in range(n):
+        if not valid[i]:
+            continue
+        r1 = value_to_rank[value_1[i]]
+        r2 = value_to_rank[value_2[i]]
+        out[i] = 1.0 if r1 < r2 else 0.0
+    return out
+
+
 def _shuffle_labels_for_control(labels: np.ndarray, feature: str, seed: int) -> np.ndarray:
-    """Create shuffled labels for control task: same activations, random label assignment.
-    Permutes labels among valid (non-NaN) positions. Reproducible per feature via seed."""
+    """Fallback control: shuffled labels (used when raw values not available)."""
     out = np.full_like(labels, np.nan, dtype=labels.dtype)
     valid = ~np.isnan(labels)
     if not np.any(valid):
@@ -127,7 +153,7 @@ def train_and_evaluate_nonlinear_probe(
             alpha=1e-4,
             batch_size="auto",
             learning_rate="adaptive",
-            learning_rate_init=1e-3,
+            learning_rate_init=1e-4,
             max_iter=max_epochs,
             shuffle=True,
             random_state=random_state,
@@ -290,9 +316,11 @@ def run_nonlinear_probing_experiment(
     features_to_probe: List[str] = None,
     output_dir: Path = None,
     logger: logging.Logger = None,
+    feature_raw_values: Optional[Dict[str, tuple]] = None,
 ) -> tuple:
-    """Run nonlinear (MLP) probing on configured layers only, plus control (shuffled labels).
-    Returns (experiment, control_experiment). Linear probes are unaffected."""
+    """Run nonlinear (MLP) probing on configured layers only, plus control.
+    Control uses Scrambled Hierarchy when feature_raw_values is provided (recommended);
+    otherwise falls back to shuffled labels. Returns (experiment, control_experiment)."""
     n_samples, n_layers, d_model = activations.shape
 
     if features_to_probe is None:
@@ -311,7 +339,10 @@ def run_nonlinear_probing_experiment(
     logger.info(f"Condition: {condition}")
     logger.info(f"Layers to probe: {layers_to_run} (config: NONLINEAR_PROBE_LAYERS)")
     logger.info(f"Features: {features_to_probe}")
-    logger.info("Control task: shuffled labels (same activations) for selectivity check")
+    if feature_raw_values:
+        logger.info("Control task: Scrambled Hierarchy (random hidden ranks, preserves transitivity)")
+    else:
+        logger.info("Control task: shuffled labels (fallback; re-extract activations with raw values for Scrambled Hierarchy)")
 
     gt_for_split = np.where(np.isnan(ground_truth_labels), 0, ground_truth_labels).astype(int)
     split_indices = create_stratified_splits(n_samples, gt_for_split)
@@ -338,9 +369,14 @@ def run_nonlinear_probing_experiment(
             labels = ground_truth_labels.copy()
         else:
             continue
-        control_labels = _shuffle_labels_for_control(
-            labels, feature, seed=CONTROL_TASK_SEED + hash(feature) % (2**32)
-        )
+        seed = CONTROL_TASK_SEED + hash(feature) % (2**32)
+        if feature_raw_values and feature in feature_raw_values:
+            v1, v2 = feature_raw_values[feature]
+            control_labels = _scrambled_hierarchy_control_labels(
+                np.asarray(v1), np.asarray(v2), seed=seed
+            )
+        else:
+            control_labels = _shuffle_labels_for_control(labels, feature, seed=seed)
         for layer in layers_to_run:
             result = probe_layer_nonlinear(
                 activations=activations,
@@ -388,12 +424,13 @@ def run_nonlinear_probing_experiment(
         split_indices=split_indices,
         config=common_config,
     )
+    control_task_name = "control_scrambled_hierarchy" if feature_raw_values else "control_shuffled_labels"
     control_experiment = ProbeExperiment(
         model_name=model_name,
         condition=condition,
         results=control_results,
         split_indices=split_indices,
-        config={**common_config, "task": "control_shuffled_labels", "control_seed": CONTROL_TASK_SEED},
+        config={**common_config, "task": control_task_name, "control_seed": CONTROL_TASK_SEED},
     )
     return experiment, control_experiment
 
@@ -403,7 +440,7 @@ def export_nonlinear_results(
     output_dir: Path,
     control_experiment: Optional[ProbeExperiment] = None,
 ):
-    """Export nonlinear probe results to CSV; optionally export control (shuffled-labels) results."""
+    """Export nonlinear probe results to CSV; optionally export control (Scrambled Hierarchy or shuffled-labels) results."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -433,7 +470,7 @@ def export_nonlinear_results(
         cdf = control_experiment.to_dataframe()
         c_csv = output_dir / f"probe_nonlinear_control_results_{control_experiment.model_name}_{control_experiment.condition}.csv"
         cdf.to_csv(c_csv, index=False)
-        print(f"Saved control (shuffled-labels) results to {c_csv}")
+        print(f"Saved control results to {c_csv}")
         c_matrix = control_experiment.get_layer_feature_matrix("test_accuracy")
         c_matrix_path = output_dir / f"probe_nonlinear_control_matrix_accuracy_{control_experiment.model_name}_{control_experiment.condition}.csv"
         c_matrix.to_csv(c_matrix_path)

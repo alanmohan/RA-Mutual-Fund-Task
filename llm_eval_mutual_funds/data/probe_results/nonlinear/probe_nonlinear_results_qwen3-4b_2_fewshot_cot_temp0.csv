@@ -1,0 +1,2 @@
+layer,feature,test_accuracy,test_auc,test_n_samples,val_accuracy,val_auc,train_accuracy,cv_mean,cv_std,accuracy_ci_lower,accuracy_ci_upper,p_value,is_significant,best_C,n_train,n_val,n_test
+21,stdev_f1_lower,0.65,0.6762655996326604,1000,0.6367265469061876,0.6818491594729669,0.801086024578451,0.6367265469061876,0.0,0.6199146825068091,0.6789372899475243,8.078155193483032e-22,True,0.0,3499,501,1000

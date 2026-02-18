@@ -1,0 +1,22 @@
+{
+  "model_name": "qwen3-4b",
+  "condition": "2_fewshot_cot_temp0",
+  "timestamp": "2026-02-17T20:21:15.345436",
+  "probe_type": "nonlinear",
+  "train_ratio": 0.7,
+  "val_ratio": 0.1,
+  "test_ratio": 0.2,
+  "n_samples": 5000,
+  "n_layers": 36,
+  "d_model": 2560,
+  "nonlinear_probe_layers": [
+    21
+  ],
+  "hidden_sizes": [
+    256,
+    128,
+    62,
+    32
+  ],
+  "max_epochs": 300
+}

@@ -88,6 +88,7 @@ def main():
     activations = data["activations"]
     feature_labels = data["feature_labels"]
     labels = data["labels"]
+    feature_raw_values = data.get("feature_raw_values")
 
     linear_experiment = None
     if not SKIP_LINEAR_PROBING:
@@ -121,6 +122,7 @@ def main():
         features_to_probe=features_to_probe,
         output_dir=nonlinear_dir,
         logger=logger,
+        feature_raw_values=feature_raw_values,
     )
     nonlinear_pickle = nonlinear_dir / f"probe_nonlinear_{args.model}_{args.condition}.pkl"
     with open(nonlinear_pickle, "wb") as f:
