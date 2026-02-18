@@ -455,7 +455,6 @@ def extract_activations(
     # Create feature labels and target labels (Medalist)
     feature_labels = create_feature_labels(data)
     labels = feature_labels["medalist_f1_higher"].values.copy()
-    feature_raw_values = create_feature_raw_values(data)
 
     # Check for existing checkpoint
     start_idx = 0
@@ -601,6 +600,8 @@ def main():
         resume=not args.no_resume,
         device=args.device,
     )
+
+    feature_raw_values = create_feature_raw_values(data)
 
     output_path = get_activation_path(ACTIVATIONS_DIR, args.model, args.condition)
 
