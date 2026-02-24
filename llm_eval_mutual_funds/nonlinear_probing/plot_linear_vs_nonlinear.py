@@ -2,6 +2,8 @@
 """
 Plot linear vs nonlinear probe comparison and nonlinear-only views.
 """
+import argparse
+import sys
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -232,3 +234,98 @@ def run_comparison_plots(
         condition,
         control_df=control_df,
     )
+
+
+def _ensure_probe_module():
+    """Ensure 'probe' module is available for loading pkl files."""
+    if "probe" in sys.modules:
+        return
+    _root = Path(__file__).resolve().parent.parent
+    sys.path.insert(0, str(_root / "linear_probing"))
+    import probe  # noqa: F401
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Generate linear vs nonlinear probe comparison plots from pkl files."
+    )
+    parser.add_argument(
+        "--input-dir",
+        "-i",
+        type=Path,
+        required=True,
+        help="Folder containing (or recursively containing) probe pkl files: probe_*.pkl, probe_nonlinear_*.pkl, probe_nonlinear_control_*.pkl.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        "-o",
+        type=Path,
+        required=True,
+        help="Folder to save plot images.",
+    )
+    args = parser.parse_args()
+    input_dir = args.input_dir.resolve()
+    output_dir = args.output_dir.resolve()
+
+    if not input_dir.is_dir():
+        raise SystemExit(f"Input directory does not exist: {input_dir}")
+
+    _ensure_probe_module()
+    import probe as probe_mod
+
+    # Find all nonlinear experiment pkls (exclude control), including in subdirs
+    nonlinear_glob = list(input_dir.rglob("probe_nonlinear_*.pkl"))
+    nonlinear_pkls = [p for p in nonlinear_glob if "control" not in p.name]
+
+    if not nonlinear_pkls:
+        print(f"No probe_nonlinear_*.pkl files found in {input_dir}")
+        return
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for nlp_path in sorted(nonlinear_pkls):
+        # stem e.g. "probe_nonlinear_qwen3-4b_2_fewshot_cot_temp0"
+        stem = nlp_path.stem
+        suffix = stem.replace("probe_nonlinear_", "", 1)
+        # Use suffix as run_id for titles; split into model/condition for display (optional)
+        if "_" in suffix:
+            model_name = suffix.split("_")[0]
+            condition = "_".join(suffix.split("_")[1:])
+        else:
+            model_name = suffix
+            condition = ""
+
+        same_dir = nlp_path.parent
+        linear_path = same_dir / f"probe_{suffix}.pkl"
+        if not linear_path.exists():
+            linear_path = input_dir / f"probe_{suffix}.pkl"
+        control_path = same_dir / f"probe_nonlinear_control_{suffix}.pkl"
+
+        nonlinear_experiment = probe_mod.ProbeExperiment.load(nlp_path)
+        linear_experiment = None
+        if linear_path.exists():
+            try:
+                linear_experiment = probe_mod.ProbeExperiment.load(linear_path)
+            except Exception as e:
+                print(f"Warning: could not load linear {linear_path}: {e}")
+        control_experiment = None
+        if control_path.exists():
+            try:
+                control_experiment = probe_mod.ProbeExperiment.load(control_path)
+            except Exception as e:
+                print(f"Warning: could not load control {control_path}: {e}")
+
+        print(f"Plotting: {suffix} (linear={linear_experiment is not None}, control={control_experiment is not None})")
+        run_comparison_plots(
+            linear_experiment=linear_experiment,
+            nonlinear_experiment=nonlinear_experiment,
+            output_dir=output_dir,
+            model_name=model_name,
+            condition=condition,
+            control_experiment=control_experiment,
+        )
+    print(f"Plots saved to {output_dir}")
+
+
+if __name__ == "__main__":
+    main()

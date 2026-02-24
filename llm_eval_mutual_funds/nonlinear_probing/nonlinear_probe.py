@@ -148,7 +148,7 @@ def train_and_evaluate_nonlinear_probe(
         warnings.filterwarnings("ignore", category=UserWarning)
         clf = MLPClassifier(
             hidden_layer_sizes=hidden_layer_sizes,
-            activation="logistic",
+            activation="relu",
             solver="adam",
             alpha=1e-4,
             batch_size=200,
