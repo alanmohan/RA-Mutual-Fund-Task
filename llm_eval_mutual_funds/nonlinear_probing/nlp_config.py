@@ -28,12 +28,13 @@ NONLINEAR_PROBE_LAYERS = [21]  # Set to e.g. [0, 5, 10, 15, 20, 25] to probe a s
 NONLINEAR_PROBE_LOSS = "bce"
 
 # MLP architecture defaults (used when tuning is off)
-NONLINEAR_PROBE_HIDDEN = (128,)
-NONLINEAR_PROBE_DROPOUT = 0.1
-NONLINEAR_PROBE_LR = 1e-3
-NONLINEAR_PROBE_MAX_EPOCHS = 500
+NONLINEAR_PROBE_HIDDEN = (32,)
+NONLINEAR_PROBE_DROPOUT = 0.3
+NONLINEAR_PROBE_LR = 5e-4
+NONLINEAR_PROBE_MAX_EPOCHS = 300
 NONLINEAR_PROBE_EARLY_STOPPING_PATIENCE = 30
 NONLINEAR_PROBE_RANDOM_STATE = 42
+NONLINEAR_PROBE_INPUT_NOISE_STD = 0.1
 
 # Class weighting: True = balanced pos_weight in BCEWithLogitsLoss (matches linear probe class_weight="balanced")
 NONLINEAR_PROBE_USE_CLASS_WEIGHT = True
@@ -46,10 +47,11 @@ NONLINEAR_PROBE_WARMUP_EPOCHS = 10
 # Enable with --tune CLI flag or set NONLINEAR_PROBE_TUNE = True.
 NONLINEAR_PROBE_TUNE = False
 NONLINEAR_PROBE_TUNE_GRID = {
-    "hidden_sizes": [(64,), (128,), (256,), (128, 64), (256, 128)],
+    "hidden_sizes": [(16,), (32,), (64,), (128,), (32, 16), (64, 32)],
     "lr": [1e-3, 5e-4, 1e-4],
-    "dropout": [0.0, 0.1, 0.3],
-    "weight_decay": [0.0, 1e-5, 1e-4],
+    "dropout": [0.0, 0.1, 0.3, 0.5],
+    "weight_decay": [1e-4, 1e-3, 1e-2, 5e-2],
+    "input_noise_std": [0.0, 0.1, 0.3],
 }
 
 # Control task: shuffled labels (same activations, random labels). Used to check selectivity.

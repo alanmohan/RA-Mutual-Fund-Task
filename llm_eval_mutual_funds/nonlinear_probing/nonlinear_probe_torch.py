@@ -91,10 +91,11 @@ NONLINEAR_PROBE_TUNE_GRID = getattr(nlp_config_mod, "NONLINEAR_PROBE_TUNE_GRID",
 CONTROL_TASK_SEED = getattr(nlp_config_mod, "CONTROL_TASK_SEED", 42)
 
 DEFAULT_TUNE_GRID = {
-    "hidden_sizes": [(64,), (128,), (256,), (128, 64), (256, 128)],
+    "hidden_sizes": [(16,), (32,), (64,), (128,), (32, 16), (64, 32)],
     "lr": [1e-3, 5e-4, 1e-4],
-    "dropout": [0.0, 0.1, 0.3],
-    "weight_decay": [0.0, 1e-5, 1e-4],
+    "dropout": [0.0, 0.1, 0.3, 0.5],
+    "weight_decay": [1e-4, 1e-3, 1e-2, 5e-2],
+    "input_noise_std": [0.0, 0.1, 0.3],
 }
 
 
@@ -164,19 +165,25 @@ def _shuffle_labels_for_control(labels: np.ndarray, feature: str, seed: int) -> 
 
 
 class MLPProbe(nn.Module):
-    """Binary classifier MLP: input_dim -> hidden -> ... -> 1 logit."""
+    """Binary classifier MLP: input_dim -> hidden -> ... -> 1 logit.
+    Includes BatchNorm after each linear layer and optional Gaussian input noise
+    during training to regularize against memorization.
+    """
 
     def __init__(
         self,
         input_dim: int,
         hidden_sizes: Tuple[int, ...],
         dropout: float = 0.0,
+        input_noise_std: float = 0.0,
     ):
         super().__init__()
+        self.input_noise_std = input_noise_std
         layers: List[nn.Module] = []
         prev = input_dim
         for h in hidden_sizes:
             layers.append(nn.Linear(prev, h))
+            layers.append(nn.BatchNorm1d(h))
             layers.append(nn.ReLU(inplace=True))
             if dropout > 0:
                 layers.append(nn.Dropout(dropout))
@@ -185,6 +192,8 @@ class MLPProbe(nn.Module):
         self.net = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.training and self.input_noise_std > 0:
+            x = x + torch.randn_like(x) * self.input_noise_std
         return self.net(x).squeeze(-1)
 
 
@@ -384,6 +393,7 @@ def train_and_evaluate_nonlinear_probe_torch(
     loss_type: str = "bce",
     lr: float = NONLINEAR_PROBE_LR,
     weight_decay: float = 0.0,
+    input_noise_std: float = 0.0,
     use_class_weight: bool = NONLINEAR_PROBE_USE_CLASS_WEIGHT,
     use_scheduler: bool = NONLINEAR_PROBE_USE_SCHEDULER,
     warmup_epochs: int = NONLINEAR_PROBE_WARMUP_EPOCHS,
@@ -409,6 +419,7 @@ def train_and_evaluate_nonlinear_probe_torch(
         input_dim=d_model,
         hidden_sizes=tuple(hidden_layer_sizes),
         dropout=dropout,
+        input_noise_std=input_noise_std,
     ).to(device)
 
     if use_hinge:
@@ -529,10 +540,11 @@ def _tune_hyperparams(
         lr_val = params.get("lr", NONLINEAR_PROBE_LR)
         dp = params.get("dropout", NONLINEAR_PROBE_DROPOUT)
         wd = params.get("weight_decay", 0.0)
+        noise = params.get("input_noise_std", 0.0)
 
         metrics = train_and_evaluate_nonlinear_probe_torch(
             X_train, y_train, X_val, y_val,
-            X_val, y_val,  # placeholder test; we only care about val_acc here
+            X_val, y_val,
             device=device,
             hidden_layer_sizes=hs,
             dropout=dp,
@@ -542,6 +554,7 @@ def _tune_hyperparams(
             loss_type=loss_type,
             lr=lr_val,
             weight_decay=wd,
+            input_noise_std=noise,
             use_class_weight=True,
             use_scheduler=True,
         )
@@ -549,7 +562,7 @@ def _tune_hyperparams(
         pbar.set_postfix(val_acc=f"{va:.3f}", best=f"{best_val_acc:.3f}")
         if va > best_val_acc:
             best_val_acc = va
-            best_params = {"hidden_sizes": hs, "lr": lr_val, "dropout": dp, "weight_decay": wd}
+            best_params = {"hidden_sizes": hs, "lr": lr_val, "dropout": dp, "weight_decay": wd, "input_noise_std": noise}
 
     return best_params
 
@@ -581,11 +594,13 @@ def probe_layer_nonlinear_torch(
     X_val, y_val = remove_nans(X[split_indices["val"]], y[split_indices["val"]])
     X_test, y_test = remove_nans(X[split_indices["test"]], y[split_indices["test"]])
 
+    default_noise = getattr(nlp_config_mod, "NONLINEAR_PROBE_INPUT_NOISE_STD", 0.0)
     default_params = {
         "hidden_sizes": list(NONLINEAR_PROBE_HIDDEN),
         "lr": NONLINEAR_PROBE_LR,
         "dropout": NONLINEAR_PROBE_DROPOUT,
         "weight_decay": 0.0,
+        "input_noise_std": default_noise,
         "tuned": False,
     }
     min_samples = 20
@@ -626,6 +641,7 @@ def probe_layer_nonlinear_torch(
         "lr": float(hp.get("lr", NONLINEAR_PROBE_LR)),
         "dropout": float(hp.get("dropout", NONLINEAR_PROBE_DROPOUT)),
         "weight_decay": float(hp.get("weight_decay", 0.0)),
+        "input_noise_std": float(hp.get("input_noise_std", default_noise)),
         "tuned": bool(hp),
     }
     metrics = train_and_evaluate_nonlinear_probe_torch(
@@ -635,6 +651,7 @@ def probe_layer_nonlinear_torch(
         lr=hp.get("lr", NONLINEAR_PROBE_LR),
         dropout=hp.get("dropout", NONLINEAR_PROBE_DROPOUT),
         weight_decay=hp.get("weight_decay", 0.0),
+        input_noise_std=hp.get("input_noise_std", default_noise),
     )
 
     if (
