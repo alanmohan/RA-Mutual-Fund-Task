@@ -83,12 +83,14 @@ NONLINEAR_PROBE_EARLY_STOPPING_PATIENCE = nlp_config_mod.NONLINEAR_PROBE_EARLY_S
 NONLINEAR_PROBE_RANDOM_STATE = nlp_config_mod.NONLINEAR_PROBE_RANDOM_STATE
 NONLINEAR_PROBE_LOSS = getattr(nlp_config_mod, "NONLINEAR_PROBE_LOSS", "bce")
 NONLINEAR_PROBE_LR = getattr(nlp_config_mod, "NONLINEAR_PROBE_LR", 5e-4)
+NONLINEAR_PROBE_WEIGHT_DECAY = getattr(nlp_config_mod, "NONLINEAR_PROBE_WEIGHT_DECAY", 0.0)
 NONLINEAR_PROBE_USE_CLASS_WEIGHT = getattr(nlp_config_mod, "NONLINEAR_PROBE_USE_CLASS_WEIGHT", True)
 NONLINEAR_PROBE_USE_SCHEDULER = getattr(nlp_config_mod, "NONLINEAR_PROBE_USE_SCHEDULER", True)
 NONLINEAR_PROBE_WARMUP_EPOCHS = getattr(nlp_config_mod, "NONLINEAR_PROBE_WARMUP_EPOCHS", 10)
 NONLINEAR_PROBE_TUNE = getattr(nlp_config_mod, "NONLINEAR_PROBE_TUNE", False)
 NONLINEAR_PROBE_TUNE_GRID = getattr(nlp_config_mod, "NONLINEAR_PROBE_TUNE_GRID", None)
 CONTROL_TASK_SEED = getattr(nlp_config_mod, "CONTROL_TASK_SEED", 42)
+SKIP_CONTROL_TASK = getattr(nlp_config_mod, "SKIP_CONTROL_TASK", False)
 
 DEFAULT_TUNE_GRID = {
     "hidden_sizes": [(64,), (128,), (256,), (128, 64), (256, 128)],
@@ -383,7 +385,7 @@ def train_and_evaluate_nonlinear_probe_torch(
     batch_size: int = 128,
     loss_type: str = "bce",
     lr: float = NONLINEAR_PROBE_LR,
-    weight_decay: float = 0.0,
+    weight_decay: float = NONLINEAR_PROBE_WEIGHT_DECAY,
     use_class_weight: bool = NONLINEAR_PROBE_USE_CLASS_WEIGHT,
     use_scheduler: bool = NONLINEAR_PROBE_USE_SCHEDULER,
     warmup_epochs: int = NONLINEAR_PROBE_WARMUP_EPOCHS,
@@ -585,7 +587,7 @@ def probe_layer_nonlinear_torch(
         "hidden_sizes": list(NONLINEAR_PROBE_HIDDEN),
         "lr": NONLINEAR_PROBE_LR,
         "dropout": NONLINEAR_PROBE_DROPOUT,
-        "weight_decay": 0.0,
+        "weight_decay": NONLINEAR_PROBE_WEIGHT_DECAY,
         "tuned": False,
     }
     min_samples = 20
@@ -625,7 +627,7 @@ def probe_layer_nonlinear_torch(
         "hidden_sizes": list(hp.get("hidden_sizes", NONLINEAR_PROBE_HIDDEN)),
         "lr": float(hp.get("lr", NONLINEAR_PROBE_LR)),
         "dropout": float(hp.get("dropout", NONLINEAR_PROBE_DROPOUT)),
-        "weight_decay": float(hp.get("weight_decay", 0.0)),
+        "weight_decay": float(hp.get("weight_decay", NONLINEAR_PROBE_WEIGHT_DECAY)),
         "tuned": bool(hp),
     }
     metrics = train_and_evaluate_nonlinear_probe_torch(
@@ -634,7 +636,7 @@ def probe_layer_nonlinear_torch(
         hidden_layer_sizes=hp.get("hidden_sizes", NONLINEAR_PROBE_HIDDEN),
         lr=hp.get("lr", NONLINEAR_PROBE_LR),
         dropout=hp.get("dropout", NONLINEAR_PROBE_DROPOUT),
-        weight_decay=hp.get("weight_decay", 0.0),
+        weight_decay=hp.get("weight_decay", NONLINEAR_PROBE_WEIGHT_DECAY),
     )
 
     if (
@@ -706,10 +708,10 @@ def run_nonlinear_probing_experiment_torch(
     loss_type: str = "bce",
     tune: bool = False,
     tune_grid: Optional[Dict[str, list]] = None,
-) -> Tuple[ProbeExperiment, ProbeExperiment, List[Dict[str, Any]]]:
-    """Run PyTorch nonlinear probing on configured layers + control.
-    Returns (experiment, control_experiment, best_params_list) where best_params_list has one dict per task probe
-    with keys feature, layer, tuned, hidden_sizes, lr, dropout, weight_decay.
+    skip_control: bool = False,
+) -> Tuple[ProbeExperiment, Optional[ProbeExperiment], List[Dict[str, Any]]]:
+    """Run PyTorch nonlinear probing on configured layers; optionally run control task.
+    Returns (experiment, control_experiment, best_params_list). control_experiment is None if skip_control.
     """
     n_samples, n_layers, d_model = activations.shape
     if features_to_probe is None:
@@ -720,8 +722,11 @@ def run_nonlinear_probing_experiment_torch(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     layers_to_run = _layers_to_probe(n_layers)
+    n_task_runs = len(layers_to_run) * len([f for f in features_to_probe if f in feature_labels.columns or f == "medalist_f1_higher"])
+    total = 2 * n_task_runs if not skip_control else n_task_runs
+
     print_banner(f"Nonlinear Probing (PyTorch): {model_name} / {condition}")
-    print(f"Device: {device}, Loss: {loss_type}, Tune: {tune}")
+    print(f"Device: {device}, Loss: {loss_type}, Tune: {tune}, Skip control: {skip_control}")
     print(f"Layers: {layers_to_run}, Features: {features_to_probe}")
 
     gt_for_split = np.where(np.isnan(ground_truth_labels), 0, ground_truth_labels).astype(int)
@@ -730,8 +735,7 @@ def run_nonlinear_probing_experiment_torch(
     results: List[ProbeResult] = []
     control_results: List[ProbeResult] = []
     best_params_list: List[Dict[str, Any]] = []
-    total = 2 * len(layers_to_run) * len([f for f in features_to_probe if f in feature_labels.columns or f == "medalist_f1_higher"])
-    pbar = tqdm(total=total, desc="Nonlinear (torch) + control")
+    pbar = tqdm(total=total, desc="Nonlinear (torch)" + ("" if skip_control else " + control"))
 
     for feature in features_to_probe:
         if feature in feature_labels.columns:
@@ -767,22 +771,25 @@ def run_nonlinear_probing_experiment_torch(
             best_params_list.append(rec)
             label = "Best params (tuned)" if params_used.get("tuned") else "Params (default)"
             print(f"  {feature} layer {layer}: {label} = {params_used}")
-            # Control probe: separate model trained on same X but shuffled/scrambled y; never uses task probe or task labels
-            ctrl, _ = probe_layer_nonlinear_torch(
-                activations=activations,
-                labels=control_labels,
-                layer=layer,
-                split_indices=split_indices,
-                device=device,
-                feature_name=feature,
-                plot_output_dir=output_dir,
-                model_name=model_name,
-                condition=condition,
-                is_control=True,
-                loss_type=loss_type,
-            )
-            control_results.append(ctrl)
-            pbar.update(2)
+            if not skip_control:
+                # Control probe: separate model trained on same X but shuffled/scrambled y; never uses task probe or task labels
+                ctrl, _ = probe_layer_nonlinear_torch(
+                    activations=activations,
+                    labels=control_labels,
+                    layer=layer,
+                    split_indices=split_indices,
+                    device=device,
+                    feature_name=feature,
+                    plot_output_dir=output_dir,
+                    model_name=model_name,
+                    condition=condition,
+                    is_control=True,
+                    loss_type=loss_type,
+                )
+                control_results.append(ctrl)
+                pbar.update(2)
+            else:
+                pbar.update(1)
     pbar.close()
 
     common_config = {
@@ -811,14 +818,16 @@ def run_nonlinear_probing_experiment_torch(
         split_indices=split_indices,
         config=common_config,
     )
-    control_task_name = "control_scrambled_hierarchy" if feature_raw_values else "control_shuffled_labels"
-    control_experiment = ProbeExperiment(
-        model_name=model_name,
-        condition=condition,
-        results=control_results,
-        split_indices=split_indices,
-        config={**common_config, "task": control_task_name, "control_seed": CONTROL_TASK_SEED},
-    )
+    control_experiment: Optional[ProbeExperiment] = None
+    if not skip_control and control_results:
+        control_task_name = "control_scrambled_hierarchy" if feature_raw_values else "control_shuffled_labels"
+        control_experiment = ProbeExperiment(
+            model_name=model_name,
+            condition=condition,
+            results=control_results,
+            split_indices=split_indices,
+            config={**common_config, "task": control_task_name, "control_seed": CONTROL_TASK_SEED},
+        )
     return experiment, control_experiment, best_params_list
 
 
@@ -882,6 +891,10 @@ def main() -> int:
                         help="Enable hyperparameter tuning (grid search over val accuracy).")
     parser.add_argument("--no-tune", action="store_true", default=False,
                         help="Disable tuning even if config has it enabled.")
+    parser.add_argument("--skip-control", action="store_true", default=None,
+                        help="Skip control task (task probes only). Overrides config SKIP_CONTROL_TASK.")
+    parser.add_argument("--no-skip-control", action="store_true", default=False,
+                        help="Run control task even if config has SKIP_CONTROL_TASK=True.")
     args = parser.parse_args()
 
     if args.device:
@@ -898,6 +911,12 @@ def main() -> int:
     else:
         do_tune = NONLINEAR_PROBE_TUNE
     output_dir = Path(args.output_dir) if args.output_dir else PROBE_RESULTS_DIR / "nonlinear_torch"
+    if args.no_skip_control:
+        skip_control = False
+    elif args.skip_control is not None:
+        skip_control = args.skip_control
+    else:
+        skip_control = SKIP_CONTROL_TASK
 
     activation_path = ACTIVATIONS_DIR / f"{args.model}_{args.condition}_activations.npz"
     if not activation_path.exists():
@@ -922,6 +941,7 @@ def main() -> int:
         feature_raw_values=feature_raw_values,
         loss_type=loss_type,
         tune=do_tune,
+        skip_control=skip_control,
     )
 
     export_nonlinear_results(

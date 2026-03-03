@@ -17,7 +17,7 @@ SKIP_LINEAR_PROBING = True
 # A list of feature names = probe only those features, e.g. ["beta_f1_lower", "volatility_f1_lower"].
 # CLI --features overrides this when provided.
 # NONLINEAR_PROBE_FEATURES = ['beta_f1_lower', 'stdev_f1_lower', 'medalist_f1_higher', 'turnover_f1_lower', 'inception_f1_older', 'assets_f1_higher', 'tenure_f1_longer']  # Set to e.g. ["beta_f1_lower", "volatility_f1_lower"] to probe a subset
-NONLINEAR_PROBE_FEATURES = ['stdev_f1_lower']  # Set to e.g. ["beta_f1_lower", "volatility_f1_lower"] to probe a subset
+NONLINEAR_PROBE_FEATURES = ['beta_f1_lower']  # Set to e.g. ["beta_f1_lower", "volatility_f1_lower"] to probe a subset
 
 # Layers to run nonlinear (MLP) probes on. Saves time vs running on all layers.
 # None = all layers; or a list of layer indices, e.g. [0, 5, 10, 15, 20, 25]
@@ -28,9 +28,10 @@ NONLINEAR_PROBE_LAYERS = [21]  # Set to e.g. [0, 5, 10, 15, 20, 25] to probe a s
 NONLINEAR_PROBE_LOSS = "bce"
 
 # MLP architecture defaults (used when tuning is off)
-NONLINEAR_PROBE_HIDDEN = (128,)
+NONLINEAR_PROBE_HIDDEN = (256,)
 NONLINEAR_PROBE_DROPOUT = 0.1
-NONLINEAR_PROBE_LR = 1e-3
+NONLINEAR_PROBE_LR = 5e-4
+NONLINEAR_PROBE_WEIGHT_DECAY = 5e-4  # L2 regularization when not tuning; tuning grid overrides per run
 NONLINEAR_PROBE_MAX_EPOCHS = 500
 NONLINEAR_PROBE_EARLY_STOPPING_PATIENCE = 30
 NONLINEAR_PROBE_RANDOM_STATE = 42
@@ -55,3 +56,5 @@ NONLINEAR_PROBE_TUNE_GRID = {
 # Control task: shuffled labels (same activations, random labels). Used to check selectivity.
 # If control accuracy is high (comparable to real probe), the MLP may be overfitting.
 CONTROL_TASK_SEED = 42
+# If True, skip control task entirely (task probes only). Overridable by CLI --skip-control / --no-skip-control.
+SKIP_CONTROL_TASK = True
