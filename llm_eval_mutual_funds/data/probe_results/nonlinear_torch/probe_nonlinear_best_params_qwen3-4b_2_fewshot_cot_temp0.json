@@ -1,11 +1,12 @@
 [
   {
-    "feature": "beta_f1_lower",
-    "layer": 21,
+    "feature": "inception_f1_older",
+    "layer": 10,
     "hidden_sizes": [
-      64
+      256,
+      128
     ],
-    "lr": 0.001,
+    "lr": 0.0005,
     "dropout": 0.0,
     "weight_decay": 0.0001,
     "tuned": true
