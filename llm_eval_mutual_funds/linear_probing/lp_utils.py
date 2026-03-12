@@ -285,9 +285,11 @@ def load_latest_checkpoint(checkpoint_path: Path, prefix: str = "extraction") ->
         return pickle.load(f)
 
 
-def get_activation_path(activations_dir: Path, model_name: str, condition: str) -> Path:
-    """Get the path for storing activations."""
-    return activations_dir / f"{model_name}_{condition}_activations.npz"
+def get_activation_path(activations_dir: Path, model_name: str, condition: str, token_position: int = -1) -> Path:
+    """Get the path for storing activations. If token_position != -1, include in name so last-token and value-position runs do not overwrite."""
+    if token_position == -1:
+        return activations_dir / f"{model_name}_{condition}_activations.npz"
+    return activations_dir / f"{model_name}_{condition}_pos{token_position}_activations.npz"
 
 
 def save_activations(

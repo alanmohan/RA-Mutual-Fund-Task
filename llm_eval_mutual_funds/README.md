@@ -78,7 +78,33 @@ python linear_probing/probe.py \
 python linear_probing/analyze_lp_results.py
 ```
 
-### 5) Nonlinear probing (optional)
+### 5) Sanity checks (optional)
+
+Run sanity checks to verify data and probe quality before interpreting low-accuracy features (e.g. beta, stdev for Qwen3):
+
+- **Class imbalance:** Proportion of binary labels (0 vs 1) per feature; severe imbalance can affect probe accuracy.
+- **Margin of error:** Histograms of \|value_1 − value_2\| for test pairs the probe gets **wrong** vs **right** (same bins and scale). Includes a **zoomed** view into the small-\|diff\| region and a **Mann-Whitney** test (wrong &lt; right) to check if errors concentrate when values are close.
+
+```bash
+# Class imbalance only (uses CSV only; no activations needed)
+python linear_probing/sanity_checks.py --class-imbalance-only -o data/probe_results/sanity
+
+# Full: class imbalance + margin-of-error (requires activations and probe results; saves data for re-plotting)
+python linear_probing/sanity_checks.py -m qwen3-4b -c 2_fewshot_cot_temp0 -o data/probe_results/sanity
+
+# Re-plot only (no probe re-run; use after changing plot code or to regenerate figures)
+python linear_probing/sanity_checks.py -m qwen3-4b -c 2_fewshot_cot_temp0 -o data/probe_results/sanity --plot-only
+```
+
+**Outputs** (in `-o` directory):
+
+- `sanity_class_imbalance.csv` – Per-feature counts (n_0, n_1, n_nan), pct_0, pct_1, imbalance_ratio.
+- `margin_of_error_data_<model>_<condition>.pkl` – Saved wrong/right arrays per feature (for `--plot-only`).
+- `margin_of_error_<feature>_<model>_<condition>.png` – Per-feature: full + zoomed histograms (Wrong vs Right), median \|diff\| and Mann-Whitney p.
+- `margin_of_error_all_<model>_<condition>.png` – Grid of all features (full view).
+- `margin_of_error_summary_<model>_<condition>.csv` – n_wrong/right, median/mean \|diff\|, `mann_whitney_p_wrong_less_than_right`.
+
+### 6) Nonlinear probing (optional)
 
 Nonlinear probing uses **MLP probes** on the same activations and splits as linear probing. It runs only on **configurable layers** (see below) and includes **control tasks** (shuffled labels) to check selectivity.
 

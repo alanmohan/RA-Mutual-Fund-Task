@@ -311,8 +311,15 @@ class HuggingFaceActivationExtractor:
             layer_hidden = hidden_states[layer_idx + 1].cpu().numpy()
 
             for batch_idx in range(batch_size):
-                seq_len = seq_lengths[batch_idx]
-                pos = seq_len - 1 if token_position == -1 else min(token_position, seq_len - 1)
+                seq_len = int(seq_lengths[batch_idx])
+                if token_position == -1 or token_position == seq_len - 1:
+                    pos = seq_len - 1
+                elif token_position < 0:
+                    # Negative index: position from end (-1 = last, -2 = second-to-last)
+                    pos = seq_len + token_position
+                    pos = max(0, min(pos, seq_len - 1))
+                else:
+                    pos = min(token_position, seq_len - 1)
                 activations[batch_idx, layer_idx, :] = layer_hidden[batch_idx, pos, :]
 
         del outputs
@@ -405,13 +412,19 @@ def extract_activations(
     checkpoint_interval: int = EXTRACTION_CHECKPOINT_INTERVAL,
     resume: bool = True,
     device: str = "cuda",
+    token_position: int = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, pd.DataFrame]:
     """
     Extract activations for all samples in the dataset.
 
+    token_position: Index of the token to extract (-1 = last token; negative = from end, e.g. -5 = 5th from end).
+                    If None, uses lp_config.TOKEN_POSITION. For "value position" experiments, use the
+                    output of find_token_position.py and set e.g. TOKEN_POSITION = -16 in lp_config or --token-position.
     Returns:
         Tuple of (activations, sample_indices, labels, feature_labels)
     """
+    if token_position is None:
+        token_position = TOKEN_POSITION
     model_config = MODELS[model_key]
     n_layers = model_config["n_layers"]
     d_model = model_config["d_model"]
@@ -422,6 +435,7 @@ def extract_activations(
     print(f"Samples: {n_samples}")
     print(f"Layers: {n_layers}, d_model: {d_model}")
     print(f"Batch size: {batch_size}")
+    print(f"Token position: {token_position} (-1 = last, negative = from end)")
     print(f"Method: {'TransformerLens' if use_transformerlens else 'HuggingFace (manual)'}")
 
     prompt_builder = get_prompt_builder(condition_name)
@@ -481,11 +495,11 @@ def extract_activations(
 
         if use_transformerlens:
             batch_activations = extract_batch_activations_transformerlens(
-                model, prompts, token_position=TOKEN_POSITION
+                model, prompts, token_position=token_position
             )
         else:
             batch_activations = extract_batch_activations_huggingface(
-                extractor, prompts, token_position=TOKEN_POSITION
+                extractor, prompts, token_position=token_position
             )
 
         all_activations[batch_start:batch_end] = batch_activations
@@ -574,6 +588,12 @@ def main():
     parser.add_argument(
         "--no-resume", action="store_true", help="Don't resume from checkpoint"
     )
+    parser.add_argument(
+        "--token-position",
+        type=int,
+        default=None,
+        help="Token index to extract (-1 = last; negative = from end). Overrides lp_config.TOKEN_POSITION. Use find_token_position.py to get value position.",
+    )
 
     args = parser.parse_args()
 
@@ -599,11 +619,13 @@ def main():
         batch_size=args.batch_size,
         resume=not args.no_resume,
         device=args.device,
+        token_position=args.token_position,
     )
 
     feature_raw_values = create_feature_raw_values(data)
 
-    output_path = get_activation_path(ACTIVATIONS_DIR, args.model, args.condition)
+    token_position = args.token_position if args.token_position is not None else TOKEN_POSITION
+    output_path = get_activation_path(ACTIVATIONS_DIR, args.model, args.condition, token_position=token_position)
 
     metadata = {
         "model": args.model,
@@ -615,7 +637,7 @@ def main():
         "n_layers": MODELS[args.model]["n_layers"],
         "d_model": MODELS[args.model]["d_model"],
         "hook_pattern": HOOK_PATTERN,
-        "token_position": TOKEN_POSITION,
+        "token_position": token_position,
         "batch_size": args.batch_size,
     }
 

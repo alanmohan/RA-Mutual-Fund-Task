@@ -58,7 +58,9 @@ LAYERS_TO_EXTRACT = None  # Will extract all layers
 # Hook pattern for residual stream post-attention
 HOOK_PATTERN = "hook_resid_post"
 
-# Token position to extract (-1 = last token)
+# Token position to extract. -1 = last token; negative = position from end (e.g. -16 = 16th token from end).
+# Use linear_probing/find_token_position.py to get the position where a feature's value appears (e.g. "Beta: {value}" for fund 2).
+# Extraction and probe scripts accept --token-position to override this.
 TOKEN_POSITION = -1
 
 # Batch size for extraction (adjust based on GPU memory)

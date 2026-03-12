@@ -50,6 +50,7 @@ PROBE_MAX_ITER = lp_config_mod.PROBE_MAX_ITER
 PROBE_RANDOM_STATE = lp_config_mod.PROBE_RANDOM_STATE
 PROBE_CS = lp_config_mod.PROBE_CS
 load_activations = lp_utils_mod.load_activations
+get_activation_path = lp_utils_mod.get_activation_path
 print_banner = lp_utils_mod.print_banner
 
 # Split settings
@@ -487,6 +488,63 @@ def probe_layer(
     )
 
 
+def get_probe_test_predictions(
+    activations: np.ndarray,
+    labels: np.ndarray,
+    layer: int,
+    split_indices: Dict[str, np.ndarray],
+    feature_name: str = "target",
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Train a probe at the given layer and return test set truths, predictions,
+    and the sample indices (into the full activation array) for each test sample.
+    Used for sanity checks (e.g. margin-of-error on wrong predictions).
+
+    Returns:
+        y_test_true: Ground truth labels for test set (after NaN filter).
+        y_test_pred: Probe predictions for test set.
+        test_sample_indices: Indices into activations [0..n_samples-1] for each test sample.
+    """
+    X = activations[:, layer, :]
+    y = labels.astype(float)
+
+    test_idx = split_indices["test"]
+    X_test_full = X[test_idx]
+    y_test_full = y[test_idx]
+
+    valid_mask = ~(np.isnan(X_test_full).any(axis=1) | np.isnan(y_test_full))
+    test_sample_indices = test_idx[valid_mask]
+    X_test = X_test_full[valid_mask]
+    y_test = y_test_full[valid_mask]
+
+    X_train = X[split_indices["train"]]
+    y_train = y[split_indices["train"]]
+    X_val = X[split_indices["val"]]
+    y_val = y[split_indices["val"]]
+
+    def remove_nans(X, y):
+        m = ~(np.isnan(X).any(axis=1) | np.isnan(y))
+        return X[m], y[m]
+
+    X_train, y_train = remove_nans(X_train, y_train)
+    X_val, y_val = remove_nans(X_val, y_val)
+
+    min_samples = 20
+    if len(X_train) < min_samples or len(X_test) < min_samples:
+        return np.array([]), np.array([]), np.array([], dtype=int)
+
+    metrics = train_and_evaluate_probe(
+        X_train,
+        y_train.astype(int),
+        X_val,
+        y_val.astype(int),
+        X_test,
+        y_test.astype(int),
+    )
+    y_test_pred = metrics["y_test_pred"]
+    return y_test, y_test_pred, test_sample_indices
+
+
 def run_probing_experiment(
     activations: np.ndarray,
     feature_labels: pd.DataFrame,
@@ -692,6 +750,12 @@ def main():
     parser.add_argument(
         "--output-dir", "-o", type=str, default=None, help="Output directory for results"
     )
+    parser.add_argument(
+        "--token-position",
+        type=int,
+        default=None,
+        help="Token position used for extraction (from end). Use same as extraction (e.g. from find_token_position.py). Default: -1 (last token).",
+    )
 
     args = parser.parse_args()
 
@@ -700,7 +764,8 @@ def main():
 
     logger = setup_logging(output_dir, args.model, args.condition)
 
-    activation_path = ACTIVATIONS_DIR / f"{args.model}_{args.condition}_activations.npz"
+    token_position = args.token_position if args.token_position is not None else -1
+    activation_path = get_activation_path(ACTIVATIONS_DIR, args.model, args.condition, token_position=token_position)
 
     if not activation_path.exists():
         logger.error(f"Activations not found at {activation_path}")
