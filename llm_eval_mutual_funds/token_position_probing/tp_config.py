@@ -60,8 +60,8 @@ POSITION_STEP = 5
 # Number of samples to extract (fewer than full probing to keep storage sane).
 TP_SAMPLE_SIZE = 1000
 
-# Batch size for extraction — sized for a T4 (16 GB VRAM).
-TP_EXTRACTION_BATCH_SIZE = 5
+# Batch size for extraction. Use 5 for T4 (16 GB); 24–32 for A100 (40 GB) for better GPU utilization.
+TP_EXTRACTION_BATCH_SIZE = 24
 
 # ============================================================================
 # PROBING SETTINGS

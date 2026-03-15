@@ -119,7 +119,7 @@ environment variables **before** running the script:
 | `CONDITION` | `2_fewshot_cot_temp0` | Condition name |
 | `SAMPLE_SIZE` | `1000` | Number of samples for extraction |
 | `POSITION_STEP` | `5` | Grid step (every Nth token from end) |
-| `BATCH_SIZE` | `5` | Extraction batch size |
+| `BATCH_SIZE` | `24` | Extraction batch size (use 5 for T4 16 GB; 24–32 for A100 40 GB) |
 | `DEVICE` | `cuda` | Device for extraction |
 | `FEATURE` | `beta_f1_lower` | Feature to probe |
 | `N_WORKERS` | `4` | Parallel workers for layer probing |
@@ -130,6 +130,9 @@ environment variables **before** running the script:
 | `RUN_EXTRACTION` | `yes` | Set to `no` to skip extraction |
 | `RUN_PROBING` | `yes` | Set to `no` to skip probing |
 | `RUN_PLOTTING` | `yes` | Set to `no` to skip plotting |
+| `VENV_DIR` | `llm_eval_mutual_funds/.venv_extract` | Path to venv used for download + extraction |
+
+**Environment:** The script creates a virtualenv (or uses `VENV_DIR`), installs dependencies from `requirements.txt` plus `h5py`, and runs **model download** and **activation extraction** inside that venv. It then **deactivates** the venv and runs **probing** and **plotting** in the **global** (system) Python environment.
 
 Example: run for a different feature and add plot annotations:
 
@@ -149,7 +152,7 @@ bash token_position_probing/run_token_position_experiment.sh
 |-----------|---------|-------------|
 | `POSITION_STEP` | 5 | Extract every Nth token from end |
 | `TP_SAMPLE_SIZE` | 1000 | Samples to extract (fewer = faster, less storage) |
-| `TP_EXTRACTION_BATCH_SIZE` | 5 | Batch size (sized for T4 16 GB) |
+| `TP_EXTRACTION_BATCH_SIZE` | 24 | Batch size (use 5 for T4 16 GB; 24–32 for A100 40 GB) |
 | `N_PROBE_WORKERS` | 4 | Parallel layer probes per position |
 
 All values are overridable via CLI arguments.

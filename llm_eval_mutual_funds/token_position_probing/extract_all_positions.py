@@ -94,6 +94,7 @@ def _extract_batch_all_positions(
 ) -> tuple[dict[int, np.ndarray], list[int]]:
     """Run a single forward pass and extract activations at every grid position.
 
+    Uses vectorized gather on GPU and a single GPU->CPU transfer per batch for speed.
     Returns
     -------
     pos_activations : dict[int, ndarray]
@@ -123,25 +124,40 @@ def _extract_batch_all_positions(
     hidden_states = outputs.hidden_states  # tuple of (batch, seq, d_model)
     attention_mask = inputs["attention_mask"]
     seq_lengths = attention_mask.sum(dim=1).tolist()
+    batch_size = len(prompts)
+    n_positions = len(position_grid)
 
-    pos_activations: dict[int, np.ndarray] = {}
-    for pos in position_grid:
-        arr = np.zeros((len(prompts), n_layers, d_model), dtype=np.float16)
-        for layer_idx in range(n_layers):
-            layer_hidden = hidden_states[layer_idx + 1]  # skip embedding
-            for b_idx in range(len(prompts)):
-                sl = int(seq_lengths[b_idx])
-                abs_pos = sl + pos  # pos is negative
-                abs_pos = max(0, min(abs_pos, sl - 1))
-                arr[b_idx, layer_idx, :] = (
-                    layer_hidden[b_idx, abs_pos, :].cpu().to(torch.float32).numpy().astype(np.float16)
-                )
-        pos_activations[pos] = arr
+    # Build indices (batch, n_positions): for each sample and position, token index from end
+    seq_t = torch.tensor(seq_lengths, device=device, dtype=torch.long)
+    pos_t = torch.tensor(position_grid, device=device, dtype=torch.long)
+    indices = (seq_t.unsqueeze(1) + pos_t.unsqueeze(0)).clamp(0, seq_t.unsqueeze(1) - 1)
+
+    # Stack all layers on GPU: (batch, n_layers, n_positions, d_model), one transfer to CPU
+    stacked = torch.zeros(
+        batch_size, n_layers, n_positions, d_model,
+        device=device, dtype=torch.float16,
+    )
+    for layer_idx in range(n_layers):
+        layer_hidden = hidden_states[layer_idx + 1]
+        index_exp = indices.unsqueeze(-1).expand(-1, -1, d_model)
+        gathered = torch.gather(layer_hidden, 1, index_exp)
+        stacked[:, layer_idx, :, :] = gathered
 
     del outputs, hidden_states, inputs
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+
+    # Single GPU -> CPU transfer, then split by position
+    stacked_np = stacked.cpu().numpy()
+    del stacked
     gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    pos_activations = {
+        position_grid[p]: stacked_np[:, :, p, :].copy()
+        for p in range(n_positions)
+    }
     return pos_activations, seq_lengths
 
 

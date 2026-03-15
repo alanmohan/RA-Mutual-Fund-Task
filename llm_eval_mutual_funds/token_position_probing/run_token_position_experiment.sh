@@ -24,7 +24,7 @@ CONDITION="${CONDITION:-2_fewshot_cot_temp0}"
 # Extraction (Phase 1)
 SAMPLE_SIZE="${SAMPLE_SIZE:-1000}"
 POSITION_STEP="${POSITION_STEP:-5}"
-BATCH_SIZE="${BATCH_SIZE:-5}"
+BATCH_SIZE="${BATCH_SIZE:-24}"
 DEVICE="${DEVICE:-cuda}"
 
 # Probing (Phase 2) — one feature per run
@@ -42,6 +42,9 @@ RUN_EXTRACTION="${RUN_EXTRACTION:-yes}"
 RUN_PROBING="${RUN_PROBING:-yes}"
 RUN_PLOTTING="${RUN_PLOTTING:-yes}"
 
+# Venv for extraction (download + extraction run inside this venv; probing/plot in global)
+VENV_DIR="${VENV_DIR:-}"
+
 # -----------------------------------------------------------------------------
 # PATHS
 # -----------------------------------------------------------------------------
@@ -50,6 +53,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 LLM_EVAL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Repo root (parent of llm_eval_mutual_funds)
 REPO_ROOT="$(cd "$LLM_EVAL_ROOT/.." && pwd)"
+# Default venv for extraction (inside llm_eval_mutual_funds)
+[ -z "$VENV_DIR" ] && VENV_DIR="$LLM_EVAL_ROOT/.venv_extract"
 
 # -----------------------------------------------------------------------------
 # EXPORT HUGGING FACE TOKEN
@@ -69,7 +74,36 @@ cd "$LLM_EVAL_ROOT"
 echo "Working directory: $LLM_EVAL_ROOT"
 
 # -----------------------------------------------------------------------------
-# PHASE 0: DOWNLOAD MODELS (Llama + Qwen)
+# VENV FOR EXTRACTION (and download): create and install deps from requirements.txt
+# On Colab, ensurepip often fails; we use --without-pip and bootstrap pip via get-pip.py.
+# -----------------------------------------------------------------------------
+USE_VENV=false
+if [ "$RUN_DOWNLOAD" = "yes" ] || [ "$RUN_EXTRACTION" = "yes" ]; then
+  # Require a valid venv (directory + activate script). Recreate if broken/incomplete.
+  if [ ! -f "$VENV_DIR/bin/activate" ]; then
+    [ -d "$VENV_DIR" ] && rm -rf "$VENV_DIR"
+    echo ""
+    echo "========== Creating venv for extraction: $VENV_DIR =========="
+    if ! python3 -m venv "$VENV_DIR" 2>/dev/null; then
+      echo "Standard venv failed (e.g. on Colab); trying --without-pip + get-pip.py ..."
+      rm -rf "$VENV_DIR"
+      python3 -m venv --without-pip "$VENV_DIR"
+      GET_PIP="/tmp/get-pip-$$.py"
+      curl -sS https://bootstrap.pypa.io/get-pip.py -o "$GET_PIP" || wget -q -O "$GET_PIP" https://bootstrap.pypa.io/get-pip.py
+      "$VENV_DIR/bin/python" "$GET_PIP" -q
+      rm -f "$GET_PIP"
+    fi
+  fi
+  echo ""
+  echo "========== Activating venv and installing deps (requirements.txt + h5py) =========="
+  source "$VENV_DIR/bin/activate"
+  pip install -q -r requirements.txt
+  pip install -q h5py
+  USE_VENV=true
+fi
+
+# -----------------------------------------------------------------------------
+# PHASE 0: DOWNLOAD MODELS (Llama + Qwen) — runs inside venv
 # -----------------------------------------------------------------------------
 if [ "$RUN_DOWNLOAD" = "yes" ]; then
   echo ""
@@ -80,7 +114,7 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# PHASE 1: EXTRACTION
+# PHASE 1: EXTRACTION — runs inside venv
 # -----------------------------------------------------------------------------
 if [ "$RUN_EXTRACTION" = "yes" ]; then
   echo ""
@@ -94,6 +128,16 @@ if [ "$RUN_EXTRACTION" = "yes" ]; then
     --device "$DEVICE"
 else
   echo "Skipping extraction (RUN_EXTRACTION != yes)."
+fi
+
+# -----------------------------------------------------------------------------
+# DEACTIVATE VENV — probing and plotting run in global env
+# -----------------------------------------------------------------------------
+if [ "$USE_VENV" = true ]; then
+  echo ""
+  echo "========== Deactivating venv (probing and plotting use global env) =========="
+  deactivate 2>/dev/null || true
+  USE_VENV=false
 fi
 
 # -----------------------------------------------------------------------------
