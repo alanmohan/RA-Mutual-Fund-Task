@@ -85,6 +85,13 @@ Run sanity checks to verify data and probe quality before interpreting low-accur
 - **Class imbalance:** Proportion of binary labels (0 vs 1) per feature; severe imbalance can affect probe accuracy.
 - **Margin of error:** Histograms of \|value_1 − value_2\| for test pairs the probe gets **wrong** vs **right** (same bins and scale). Includes a **zoomed** view into the small-\|diff\| region and a **Mann-Whitney** test (wrong &lt; right) to check if errors concentrate when values are close.
 
+**How to read the Mann-Whitney and rank-biserial results in this project**
+
+- **Mann-Whitney U (one-sided “wrong &lt; right”):**  
+  We compare the distribution of \|value_1 − value_2\| for **wrong** vs **right** predictions, treating each fund pair as one independent observation that falls into exactly one group. A very small p-value (for the alternative “wrong has smaller |diff| than right”) means that **errors tend to happen when the two funds are closer together on that feature**.
+- **Rank-biserial correlation (r_rb):**  
+  This is an effect-size measure derived from the Mann-Whitney statistic, in \([-1, 1]\). Here, **positive r_rb** means “wrong has smaller |diff| than right”; values around 0.2–0.3 indicate a moderate association. In other words, larger positive r_rb means a stronger pattern that **low separations in that feature are linked to more probe mistakes**.
+
 ```bash
 # Class imbalance only (uses CSV only; no activations needed)
 python linear_probing/sanity_checks.py --class-imbalance-only -o data/probe_results/sanity
