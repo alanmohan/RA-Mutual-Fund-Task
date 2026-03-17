@@ -22,11 +22,21 @@ import pandas as pd
 from tqdm import tqdm
 from joblib import Parallel, delayed
 
+import logging
+
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, roc_auc_score
 from scipy import stats
+
+try:
+    import cuml
+    from cuml.linear_model import LogisticRegression as cuLogisticRegression
+    import cupy as cp
+    CUML_AVAILABLE = True
+except ImportError:
+    CUML_AVAILABLE = False
 
 import importlib.util
 
@@ -132,11 +142,15 @@ def probe_single_layer(
     layer: int,
     split_indices: dict,
     position: int,
+    use_gpu: bool = True,
 ):
     """Train and evaluate a logistic-regression probe for one (position, layer).
 
+    Uses cuML on GPU when available and use_gpu=True, otherwise sklearn.
     Returns a dict with all metrics (matches the CSV schema).
     """
+    use_cuml = use_gpu and CUML_AVAILABLE
+
     X = X_all[:, layer, :]
     y_float = y.astype(float)
 
@@ -158,27 +172,55 @@ def probe_single_layer(
     X_te_s = scaler.transform(X_te)
 
     best_C, best_val = None, 0.0
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore")
+
+    if use_cuml:
+        cuml_logger = logging.getLogger("cuml")
+        orig_level = cuml_logger.level
+        cuml_logger.setLevel(logging.ERROR)
+
+        X_tr_gpu = cp.asarray(X_tr_s.astype(np.float32))
+        y_tr_gpu = cp.asarray(y_tr.astype(np.float32))
+        X_va_gpu = cp.asarray(X_va_s.astype(np.float32))
+        X_te_gpu = cp.asarray(X_te_s.astype(np.float32))
+
         for C in PROBE_CS:
-            clf = LogisticRegression(
-                C=C, max_iter=PROBE_MAX_ITER, random_state=PROBE_RANDOM_STATE,
-                class_weight="balanced", solver="saga", tol=1e-3, n_jobs=-1,
-            )
-            clf.fit(X_tr_s, y_tr)
-            val_acc = accuracy_score(y_va, clf.predict(X_va_s))
+            clf = cuLogisticRegression(C=C, max_iter=PROBE_MAX_ITER, tol=1e-3, solver="qn")
+            clf.fit(X_tr_gpu, y_tr_gpu)
+            val_acc = accuracy_score(y_va, cp.asnumpy(clf.predict(X_va_gpu)))
             if val_acc > best_val:
                 best_val = val_acc
                 best_C = C
 
-        final = LogisticRegression(
-            C=best_C, max_iter=PROBE_MAX_ITER * 2, random_state=PROBE_RANDOM_STATE,
-            class_weight="balanced", solver="saga", tol=1e-4, n_jobs=-1,
-        )
-        final.fit(X_tr_s, y_tr)
+        final = cuLogisticRegression(C=best_C, max_iter=PROBE_MAX_ITER * 2, tol=1e-3, solver="qn")
+        final.fit(X_tr_gpu, y_tr_gpu)
 
-    y_te_pred = final.predict(X_te_s)
-    y_te_prob = final.predict_proba(X_te_s)[:, 1]
+        y_te_pred = cp.asnumpy(final.predict(X_te_gpu))
+        y_te_prob = cp.asnumpy(final.predict_proba(X_te_gpu))[:, 1]
+
+        cuml_logger.setLevel(orig_level)
+    else:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            for C in PROBE_CS:
+                clf = LogisticRegression(
+                    C=C, max_iter=PROBE_MAX_ITER, random_state=PROBE_RANDOM_STATE,
+                    class_weight="balanced", solver="saga", tol=1e-3, n_jobs=-1,
+                )
+                clf.fit(X_tr_s, y_tr)
+                val_acc = accuracy_score(y_va, clf.predict(X_va_s))
+                if val_acc > best_val:
+                    best_val = val_acc
+                    best_C = C
+
+            final = LogisticRegression(
+                C=best_C, max_iter=PROBE_MAX_ITER * 2, random_state=PROBE_RANDOM_STATE,
+                class_weight="balanced", solver="saga", tol=1e-4, n_jobs=-1,
+            )
+            final.fit(X_tr_s, y_tr)
+
+        y_te_pred = final.predict(X_te_s)
+        y_te_prob = final.predict_proba(X_te_s)[:, 1]
+
     test_acc = accuracy_score(y_te, y_te_pred)
     test_auc = _safe_auc(y_te, y_te_prob)
 
@@ -237,6 +279,7 @@ def probe_feature_across_positions(
     condition: str,
     feature: str,
     n_workers: int = 4,
+    use_gpu: bool = True,
     output_path: Path | None = None,
 ):
     hdf5_path = tp_config.get_tp_hdf5_path(model_key, condition)
@@ -245,9 +288,13 @@ def probe_feature_across_positions(
             f"HDF5 not found: {hdf5_path}\nRun extract_all_positions.py first."
         )
 
+    use_cuml = use_gpu and CUML_AVAILABLE
+
     print_banner(f"Token-Position Probing: {feature}")
     print(f"Model: {model_key}  Condition: {condition}")
-    print(f"Workers: {n_workers}")
+    print(f"Backend: {'cuML (GPU)' if use_cuml else 'sklearn (CPU)'}")
+    if not use_cuml:
+        print(f"Workers: {n_workers}")
 
     # ---- Load metadata and labels from HDF5 -------------------------------
     with h5py.File(hdf5_path, "r") as f:
@@ -281,17 +328,25 @@ def probe_feature_across_positions(
         output_path = tp_config.get_tp_results_csv(feature, model_key, condition)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # ---- Sweep: outer=positions, inner=parallel layers --------------------
+    # ---- Sweep: outer=positions, inner=layers -----------------------------
+    # With cuML: run layers sequentially (GPU contention makes joblib counterproductive).
+    # With sklearn: parallelize layers via joblib.
     all_results = []
     pbar = tqdm(position_grid, desc="Positions")
     for pos in pbar:
         with h5py.File(hdf5_path, "r") as f:
             X_pos = f[f"activations/pos_{pos}"][:].astype(np.float32)
 
-        layer_results = Parallel(n_jobs=n_workers, prefer="threads")(
-            delayed(probe_single_layer)(X_pos, y, layer, split_indices, pos)
-            for layer in range(n_layers)
-        )
+        if use_cuml:
+            layer_results = [
+                probe_single_layer(X_pos, y, layer, split_indices, pos, use_gpu=True)
+                for layer in range(n_layers)
+            ]
+        else:
+            layer_results = Parallel(n_jobs=n_workers, prefer="threads")(
+                delayed(probe_single_layer)(X_pos, y, layer, split_indices, pos, use_gpu=False)
+                for layer in range(n_layers)
+            )
         all_results.extend(layer_results)
 
         best_in_pos = max(layer_results, key=lambda r: r["test_accuracy"])
@@ -332,6 +387,10 @@ def main():
         help=f"Parallel workers per position (default {tp_config.N_PROBE_WORKERS})",
     )
     parser.add_argument("--output", "-o", type=str, default=None, help="Override output CSV path")
+    parser.add_argument(
+        "--no-gpu", action="store_true",
+        help="Force sklearn (CPU) even when cuML is available.",
+    )
     args = parser.parse_args()
 
     probe_feature_across_positions(
@@ -339,6 +398,7 @@ def main():
         condition=args.condition,
         feature=args.feature,
         n_workers=args.n_workers,
+        use_gpu=not args.no_gpu,
         output_path=Path(args.output) if args.output else None,
     )
 
