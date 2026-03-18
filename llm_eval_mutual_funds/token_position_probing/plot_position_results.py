@@ -49,6 +49,33 @@ def _stem(feature, model, condition):
     return f"{feature}_{model}_{condition}"
 
 
+def _snap_to_grid(pos: int, positions: list[int]) -> int:
+    """Return the position in *positions* closest to *pos*."""
+    return min(positions, key=lambda p: abs(p - pos))
+
+
+def auto_find_feature_position(feature: str, model: str, condition: str) -> int | None:
+    """Try to auto-detect the feature's token position using find_feature_position.
+
+    Returns position_from_end (negative int) or None on failure.
+    """
+    try:
+        from token_position_probing.find_feature_position import (
+            find_feature_token_position,
+            FEATURE_TO_LINE_PREFIX,
+        )
+        if feature not in FEATURE_TO_LINE_PREFIX:
+            return None
+        result = find_feature_token_position(feature=feature, model_key=model, condition=condition)
+        pos = result["position_from_end"]
+        print(f"Auto-detected feature position for {feature}: {pos} "
+              f"(value={result['value_snippet']!r}, token={result['decoded_token']!r})")
+        return pos
+    except Exception as e:
+        print(f"Could not auto-detect feature position: {e}")
+        return None
+
+
 # ============================================================================
 # PLOT 1: HEATMAP
 # ============================================================================
@@ -203,7 +230,11 @@ def main():
     parser.add_argument("--condition", "-c", default=None, help="Condition (auto-detected from filename if omitted)")
     parser.add_argument(
         "--feature-position", type=int, default=None,
-        help="Token position where the feature value appears (from find_token_position.py). Drawn as vertical line.",
+        help="Token position where the feature value appears (from find_feature_position.py). Drawn as vertical line.",
+    )
+    parser.add_argument(
+        "--auto-feature-position", action="store_true",
+        help="Auto-detect feature position using find_feature_position.py (requires tokenizer).",
     )
     parser.add_argument(
         "--last-token-accuracy", type=float, default=None,
@@ -232,11 +263,19 @@ def main():
         if condition is None:
             condition = "_".join(remaining[1:]) if len(remaining) > 1 else "unknown"
 
+    feature_position = args.feature_position
+    if feature_position is None and args.auto_feature_position:
+        raw_pos = auto_find_feature_position(args.feature, model, condition)
+        if raw_pos is not None:
+            positions = sorted(df["position"].unique())
+            feature_position = _snap_to_grid(raw_pos, positions)
+            print(f"Snapped to nearest grid position: {feature_position}")
+
     output_dir = Path(args.output_dir) if args.output_dir else None
 
-    plot_heatmap(df, args.feature, model, condition, args.feature_position, output_dir)
-    plot_best_layer(df, args.feature, model, condition, args.feature_position, args.last_token_accuracy, output_dir)
-    plot_selected_layers(df, args.feature, model, condition, args.layers, args.feature_position, output_dir)
+    plot_heatmap(df, args.feature, model, condition, feature_position, output_dir)
+    plot_best_layer(df, args.feature, model, condition, feature_position, args.last_token_accuracy, output_dir)
+    plot_selected_layers(df, args.feature, model, condition, args.layers, feature_position, output_dir)
 
 
 if __name__ == "__main__":
