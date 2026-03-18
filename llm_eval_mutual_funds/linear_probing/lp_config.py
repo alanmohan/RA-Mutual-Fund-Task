@@ -100,7 +100,7 @@ TEST_RATIO = 0.20   # 20% for final unbiased evaluation
 
 # Cross-validation settings (used within training set only)
 CV_FOLDS = 5
-PROBE_MAX_ITER = 3000  # Base iterations (will be multiplied for final model) - increased to reduce convergence warnings
+PROBE_MAX_ITER = 5000  # Base iterations (will be multiplied for final model) - increased to reduce convergence warnings
 PROBE_RANDOM_STATE = 42
 
 # Regularization values to try

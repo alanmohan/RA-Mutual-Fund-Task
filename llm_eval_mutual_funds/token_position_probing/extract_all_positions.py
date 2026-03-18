@@ -128,9 +128,13 @@ def _extract_batch_all_positions(
     n_positions = len(position_grid)
 
     # Build indices (batch, n_positions): for each sample and position, token index from end
+    # pos_grid values are negative (e.g. -1, -6, …); seq_len + pos = absolute index
     seq_t = torch.tensor(seq_lengths, device=device, dtype=torch.long)
     pos_t = torch.tensor(position_grid, device=device, dtype=torch.long)
-    indices = (seq_t.unsqueeze(1) + pos_t.unsqueeze(0)).clamp(0, seq_t.unsqueeze(1) - 1)
+    raw_indices = seq_t.unsqueeze(1) + pos_t.unsqueeze(0)       # (batch, n_positions)
+    max_indices = (seq_t - 1).unsqueeze(1).expand_as(raw_indices)
+    indices = raw_indices.clamp(min=0)
+    indices = torch.min(indices, max_indices)
 
     # Stack all layers on GPU: (batch, n_layers, n_positions, d_model), one transfer to CPU
     stacked = torch.zeros(
@@ -244,6 +248,8 @@ def extract_all_positions(
     position_step: int,
     batch_size: int,
     device: str = "cuda",
+    position_min: int | None = None,
+    position_max: int | None = None,
 ):
     model_config = MODELS[model_key]
     n_layers = model_config["n_layers"]
@@ -261,6 +267,8 @@ def extract_all_positions(
     print(f"Layers: {n_layers}, d_model: {d_model}")
     print(f"Position step: {position_step}")
     print(f"Batch size: {batch_size}")
+    if position_min is not None or position_max is not None:
+        print(f"Position filter (from end): min={position_min}, max={position_max}")
 
     # ---- Labels -----------------------------------------------------------
     feature_labels = create_feature_labels(data)
@@ -304,7 +312,25 @@ def extract_all_positions(
     est_min_len = int(min(first_lens))
     del first_enc, first_prompts
 
-    position_grid = _build_position_grid(est_min_len, position_step)
+    # Full grid based on estimated minimum sequence length
+    full_grid = _build_position_grid(est_min_len, position_step)
+
+    # Optionally restrict to a sub-range, e.g. [-200, -1] for the last 200 tokens.
+    if position_min is not None or position_max is not None:
+        lo = position_min if position_min is not None else min(full_grid)
+        hi = position_max if position_max is not None else max(full_grid)
+        if lo > hi:
+            raise ValueError(f"Invalid position range: min={lo} > max={hi}")
+        position_grid = [p for p in full_grid if lo <= p <= hi]
+        if not position_grid:
+            raise ValueError(
+                f"No positions remain after filtering to [{lo}, {hi}]. "
+                f"Available range from full grid: [{min(full_grid)}, {max(full_grid)}]"
+            )
+        print(f"Position grid filter: kept {len(position_grid)}/{len(full_grid)} positions in [{lo}, {hi}]")
+    else:
+        position_grid = full_grid
+
     n_positions = len(position_grid)
     per_pos_mb = n_samples * n_layers * d_model * 2 / (1024 ** 2)
     total_gb = per_pos_mb * n_positions / 1024
@@ -341,6 +367,8 @@ def extract_all_positions(
             "d_model": d_model,
             "position_step": position_step,
             "n_positions": n_positions,
+            "position_min": position_min if position_min is not None else min(position_grid),
+            "position_max": position_max if position_max is not None else max(position_grid),
             "extraction_date": datetime.now().isoformat(),
         }
         _init_hdf5(hdf5_path, position_grid, n_samples, n_layers, d_model, metadata)
@@ -419,6 +447,18 @@ def main():
         help=f"Batch size (default {tp_config.TP_EXTRACTION_BATCH_SIZE})",
     )
     parser.add_argument("--device", default="cuda", choices=["cuda", "mps", "cpu"])
+    parser.add_argument(
+        "--position-min",
+        type=int,
+        default=None,
+        help="Minimum (most negative) token position to extract (from end). Example: -200.",
+    )
+    parser.add_argument(
+        "--position-max",
+        type=int,
+        default=None,
+        help="Maximum (closest to end) token position to extract (from end). Example: -1.",
+    )
     args = parser.parse_args()
 
     extract_all_positions(
@@ -428,6 +468,8 @@ def main():
         position_step=args.position_step,
         batch_size=args.batch_size,
         device=args.device,
+        position_min=args.position_min,
+        position_max=args.position_max,
     )
 
 

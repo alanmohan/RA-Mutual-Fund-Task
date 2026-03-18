@@ -280,6 +280,8 @@ def probe_feature_across_positions(
     feature: str,
     n_workers: int = 4,
     use_gpu: bool = True,
+    position_min: int | None = None,
+    position_max: int | None = None,
     output_path: Path | None = None,
 ):
     hdf5_path = tp_config.get_tp_hdf5_path(model_key, condition)
@@ -298,7 +300,7 @@ def probe_feature_across_positions(
 
     # ---- Load metadata and labels from HDF5 -------------------------------
     with h5py.File(hdf5_path, "r") as f:
-        position_grid = list(f["positions"][:])
+        position_grid = [int(x) for x in list(f["positions"][:])]
         n_layers = int(f.attrs["n_layers"])
 
         feature_columns = [c.decode() if isinstance(c, bytes) else c for c in f["feature_columns"][:]]
@@ -311,6 +313,22 @@ def probe_feature_across_positions(
         raise ValueError(f"Feature '{feature}' not in HDF5. Available: {feature_columns}")
 
     y = feature_labels_df[feature].values.astype(float)
+
+    # ---- Restrict positions (optional) ------------------------------------
+    # Example: position_min=-200, position_max=-1 probes only the last 200 tokens from end.
+    if position_min is not None or position_max is not None:
+        lo = position_min if position_min is not None else min(position_grid)
+        hi = position_max if position_max is not None else max(position_grid)
+        if lo > hi:
+            raise ValueError(f"Invalid position range: min={lo} > max={hi}")
+        before = len(position_grid)
+        position_grid = [p for p in position_grid if (lo <= p <= hi)]
+        if len(position_grid) == 0:
+            raise ValueError(
+                f"No positions remain after filtering to [{lo}, {hi}]. "
+                f"Available range: [{min(position_grid)}, {max(position_grid)}]"
+            )
+        print(f"Position filter: [{lo}, {hi}]  (kept {len(position_grid)}/{before})")
 
     # ---- Splits (stratified on ground-truth medalist label) ---------------
     valid_mask = ~np.isnan(y)
@@ -391,6 +409,18 @@ def main():
         "--no-gpu", action="store_true",
         help="Force sklearn (CPU) even when cuML is available.",
     )
+    parser.add_argument(
+        "--position-min",
+        type=int,
+        default=None,
+        help="Minimum (most negative) token position to probe (from end). Example: -200.",
+    )
+    parser.add_argument(
+        "--position-max",
+        type=int,
+        default=None,
+        help="Maximum (closest to end) token position to probe (from end). Example: -1.",
+    )
     args = parser.parse_args()
 
     probe_feature_across_positions(
@@ -399,6 +429,8 @@ def main():
         feature=args.feature,
         n_workers=args.n_workers,
         use_gpu=not args.no_gpu,
+        position_min=args.position_min,
+        position_max=args.position_max,
         output_path=Path(args.output) if args.output else None,
     )
 
