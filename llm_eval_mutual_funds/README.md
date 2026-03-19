@@ -111,7 +111,59 @@ python linear_probing/sanity_checks.py -m qwen3-4b -c 2_fewshot_cot_temp0 -o dat
 - `margin_of_error_all_<model>_<condition>.png` – Grid of all features (full view).
 - `margin_of_error_summary_<model>_<condition>.csv` – n_wrong/right, median/mean \|diff\|, `mann_whitney_p_wrong_less_than_right`.
 
-### 6) Nonlinear probing (optional)
+### 6) 3-Label probing (optional)
+
+The standard binary probing assigns label 0 to ties (equal values), treating them identically to clear fund-2-wins cases. Sanity checks (step 5) showed that probe errors concentrate on pairs with very small |diff|, particularly for features like beta and standard deviation.
+
+The **3-label probe** introduces a third class (label 2 = "too close to tell") for pairs whose absolute difference is within a narrow band:
+
+```
+|value_1 − value_2| < threshold_factor × std(all differences)
+```
+
+This lets the probe learn to separate clearly distinct pairs (labels 0/1) from ambiguous ones (label 2), rather than being forced to guess on near-ties.
+
+**Label scheme:**
+- `0` = fund 2 is better (fund 1 does NOT satisfy the criterion)
+- `1` = fund 1 is better
+- `2` = too close to tell
+
+For categorical features (load, ntf), label 2 is assigned when both funds have the same value. Medalist keeps the existing NaN-for-ties convention (excluded).
+
+```bash
+# Default threshold (0.1 × std)
+python linear_probing/probe_3label.py \
+  --model qwen3-4b \
+  --condition 2_fewshot_cot_temp0
+
+# Custom threshold
+python linear_probing/probe_3label.py \
+  --model qwen3-4b \
+  --condition 2_fewshot_cot_temp0 \
+  --threshold 0.2
+
+# Specific features only
+python linear_probing/probe_3label.py \
+  --model qwen3-4b \
+  --condition 2_fewshot_cot_temp0 \
+  --features beta_f1_lower stdev_f1_lower
+```
+
+**Arguments:**
+- `--threshold` / `-t` – Fraction of std(diff) used as the closeness band (default: 0.1).
+- `--features` – Subset of features to probe (default: all).
+- `--output-dir` / `-o` – Output directory (default: `data/probe_results/3label`).
+- `--token-position` – Token position used for extraction (default: -1, last token).
+
+**Outputs** (in `data/probe_results/3label/`):
+- `probe_results_3label_t<threshold>_<model>_<condition>.csv` – Per-layer per-feature results.
+- `probe_matrix_accuracy_3label_t<threshold>_<model>_<condition>.csv` – Layer × feature accuracy matrix.
+- `probe_best_layers_3label_t<threshold>_<model>_<condition>.csv` – Best layer per feature.
+- `probe_config_3label_t<threshold>_<model>_<condition>.json` – Experiment config.
+
+**Interpreting results:** Compare best-layer accuracy from the 3-label probe against the binary probe. If accuracy on the 3-class task is higher than binary (relative to chance: 33% vs 50%), the model's representations may encode magnitude differences, not just direction. If the "too close" class is well-separated, the model may be encoding absolute values rather than just comparisons.
+
+### 7) Nonlinear probing (optional)
 
 Nonlinear probing uses **MLP probes** on the same activations and splits as linear probing. It runs only on **configurable layers** (see below) and includes **control tasks** (shuffled labels) to check selectivity.
 
@@ -177,6 +229,7 @@ llm_eval_mutual_funds/
 │   ├── lp_utils.py
 │   ├── extract_activations.py
 │   ├── probe.py
+│   ├── probe_3label.py          # 3-class probe (fund1-better / fund2-better / too-close)
 │   └── analyze_lp_results.py
 └── nonlinear_probing/
     ├── nlp_config.py           # layers, MLP settings, control seed
