@@ -199,6 +199,113 @@ Per-position dataset size: `n_samples × n_layers × d_model × 2 bytes` (float1
 
 ---
 
+## Results: Qwen3-4B (2_fewshot_cot_temp0)
+
+Token-position probing was run for **beta** and **standard deviation** —
+two features where the standard last-token probe accuracy is relatively low
+(~74% and ~74% respectively). 1000 samples, step=1 (every token position),
+positions -90 to -1 for beta and -146 to -1 for stdev.
+
+### Beta (`beta_f1_lower`)
+
+| Position | Best layer | Accuracy |
+|----------|-----------|----------|
+| Feature value (pos -89) | 19 | 0.672 |
+| **Peak (pos -63)** | **21** | **0.832** |
+| Last token (pos -1) | 18 | 0.686 |
+
+**Key observations:**
+
+1. **The model does encode beta — but not at the value token.** Accuracy at
+   the beta value position (-89) is only 0.672, essentially the same as the
+   last token (0.686). The model has not yet built a linearly separable
+   representation of beta at the point where the value appears.
+
+2. **Peak accuracy occurs ~25 tokens later (pos -63, acc 0.832).** This is a
+   substantial +16 percentage-point jump over both the value position and the
+   last token. The peak region (-71 to -61) consistently exceeds 0.80.
+   Position -63 falls in the section of the prompt where fund 2's remaining
+   features (turnover, load, NTF) are presented — suggesting the model
+   integrates beta into a comparison representation only after seeing more
+   context.
+
+3. **Accuracy decays toward the end of the prompt.** From the peak (~0.83 at
+   -63) it drops steadily to ~0.69 by position -1. This is a clear
+   "encoding then forgetting" pattern: the model forms a good beta
+   representation in the middle layers around positions -70 to -55, but by
+   the time it reaches the final tokens (the answer prompt) the
+   representation has degraded.
+
+4. **The best layer is stable (layers 19-23)** throughout the high-accuracy
+   region, indicating that middle-to-late layers are where beta comparison
+   is computed.
+
+5. **Heatmap confirms a bright green band in layers 18-25 around positions
+   -75 to -55** that fades to orange/red toward both the feature-value
+   position and the last token.
+
+**Conclusion (beta):** Hypothesis 2 is **supported** — Qwen encodes beta well
+(0.83 peak) but forgets it by the last token (0.69). The encoding does not
+appear at the exact value token but rather ~25 tokens downstream, once the
+model has enough context for the comparison.
+
+### Standard Deviation (`stdev_f1_lower`)
+
+| Position | Best layer | Accuracy |
+|----------|-----------|----------|
+| Feature value (pos -90) | — | (see below) |
+| **Peak (pos -81)** | **20** | **0.840** |
+| Last token (pos -1) | 21 | 0.685 |
+
+**Key observations:**
+
+1. **Even stronger peak than beta.** Best-layer accuracy reaches 0.840 at
+   position -81 (layer 20), compared to 0.685 at the last token — a +15.5 pp
+   gain.
+
+2. **Peak is near but not at the value token.** The stdev value appears
+   around position -90; the peak is at -81, about 9 tokens later. A
+   secondary cluster of high accuracy appears around -76 (0.810) and -71
+   (0.785).
+
+3. **Same decay pattern as beta.** After the peak, accuracy trends downward
+   through the middle of the prompt and settles around 0.69 at the last
+   token.
+
+4. **Heatmap shows a similar bright band** in layers 18-25 that is strongest
+   around positions -86 to -66 and fades toward both ends.
+
+**Conclusion (stdev):** Hypothesis 2 is again **supported**. The model builds
+a strong stdev comparison representation (~0.84) shortly after seeing the
+value, but it decays by the time it reaches the final token.
+
+### Summary
+
+| Feature | Value pos | Peak pos | Peak acc | Last-token acc | Gain (peak vs last) |
+|---------|-----------|----------|----------|----------------|---------------------|
+| beta | -89 | -63 | 0.832 | 0.686 | +0.146 |
+| stdev | -90 | -81 | 0.840 | 0.685 | +0.155 |
+
+Both features show the same pattern:
+
+- The model **does** encode the feature — peak accuracy is well above chance
+  and substantially above last-token accuracy.
+- The encoding is **not** strongest at the exact value token but rather
+  **downstream**, after the model has processed additional context.
+- The encoding **decays** toward the end of the prompt, consistent with
+  hypothesis 2 ("encodes but forgets").
+- The best layers are consistently in the **middle-to-late range (18-25)**,
+  suggesting this is where feature comparison is computed.
+
+This has an important implication: **low last-token probe accuracy does not
+mean the model ignores a feature.** It means the model's final representation
+has lost the linearly decodable signal, even though a strong signal existed
+earlier in the forward pass. Strategies like attention sinking, KV-cache
+manipulation, or prompting that moves the decision point closer to where the
+model peaks could potentially recover this lost accuracy.
+
+---
+
 ## Directory Layout
 
 ```

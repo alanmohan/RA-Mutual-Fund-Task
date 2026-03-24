@@ -35,6 +35,16 @@ from sklearn.metrics import accuracy_score, roc_auc_score
 from scipy import stats
 import warnings
 
+# Optional cuML acceleration (multiclass logistic regression)
+try:
+    import cuml  # noqa: F401
+    from cuml.linear_model import LogisticRegression as cuLogisticRegression
+    from cuml.preprocessing import StandardScaler as cuStandardScaler
+
+    CUML_AVAILABLE = True
+except Exception:
+    CUML_AVAILABLE = False
+
 # ---------------------------------------------------------------------------
 # Import existing modules via importlib (same pattern as probe.py)
 # ---------------------------------------------------------------------------
@@ -50,6 +60,10 @@ lp_utils_spec.loader.exec_module(lp_utils_mod)
 
 probe_spec = importlib.util.spec_from_file_location("probe", str(_THIS_DIR / "probe.py"))
 probe_mod = importlib.util.module_from_spec(probe_spec)
+# Ensure a single canonical module identity for pickling.
+# If `probe` is already imported elsewhere (or in interactive environments),
+# we overwrite it with this loaded module so `pickle` sees the same object.
+sys.modules["probe"] = probe_mod
 probe_spec.loader.exec_module(probe_mod)
 
 # Re-use configs and helpers
@@ -286,57 +300,114 @@ def train_and_evaluate_probe_3class(
     max_iter: int = PROBE_MAX_ITER,
     Cs: List[float] = None,
     random_state: int = PROBE_RANDOM_STATE,
+    use_gpu: bool = True,
 ) -> Dict[str, Any]:
     if Cs is None:
         Cs = PROBE_CS
 
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_val_scaled = scaler.transform(X_val)
-    X_test_scaled = scaler.transform(X_test)
-
+    use_cuml = use_gpu and CUML_AVAILABLE
     best_C = None
     best_val_score = 0
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=UserWarning)
-        warnings.filterwarnings("ignore", message=".*failed to converge.*")
+    # -----------------------------------------------------------------------
+    # GPU path (cuML) with fallback to sklearn if anything fails.
+    # -----------------------------------------------------------------------
+    if use_cuml:
+        try:
+            import cupy as cp
 
-        for C in Cs:
-            probe = LogisticRegression(
-                C=C,
-                max_iter=max_iter,
+            scaler = cuStandardScaler()
+            X_train_scaled = scaler.fit_transform(cp.asarray(X_train.astype(np.float32)))
+            X_val_scaled = scaler.transform(cp.asarray(X_val.astype(np.float32)))
+            X_test_scaled = scaler.transform(cp.asarray(X_test.astype(np.float32)))
+
+            y_train_gpu = cp.asarray(y_train.astype(int))
+
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=UserWarning)
+                warnings.filterwarnings("ignore", message=".*failed to converge.*")
+
+                for C in Cs:
+                    probe = cuLogisticRegression(
+                        C=C,
+                        max_iter=max_iter,
+                        tol=1e-3,
+                        solver="qn",
+                    )
+                    probe.fit(X_train_scaled, y_train_gpu)
+                    val_pred_gpu = probe.predict(X_val_scaled)
+                    val_pred = cp.asnumpy(val_pred_gpu).astype(int)
+                    val_acc = accuracy_score(y_val, val_pred)
+
+                    if val_acc > best_val_score:
+                        best_val_score = val_acc
+                        best_C = C
+
+                final_probe = cuLogisticRegression(
+                    C=best_C,
+                    max_iter=max_iter * 2,
+                    tol=1e-4,
+                    solver="qn",
+                )
+                final_probe.fit(X_train_scaled, y_train_gpu)
+
+            y_train_pred = cp.asnumpy(final_probe.predict(X_train_scaled)).astype(int)
+            y_val_pred = cp.asnumpy(final_probe.predict(X_val_scaled)).astype(int)
+            y_test_pred = cp.asnumpy(final_probe.predict(X_test_scaled)).astype(int)
+            y_test_prob = cp.asnumpy(final_probe.predict_proba(X_test_scaled))
+
+        except Exception as e:
+            # If cuML multiclass isn't supported in the current environment,
+            # fall back to sklearn.
+            warnings.warn(f"cuML 3-class probe failed ({e}); falling back to sklearn.")
+            use_cuml = False
+
+    # -----------------------------------------------------------------------
+    # CPU path (sklearn)
+    # -----------------------------------------------------------------------
+    if not use_cuml:
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_val_scaled = scaler.transform(X_val)
+        X_test_scaled = scaler.transform(X_test)
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            warnings.filterwarnings("ignore", message=".*failed to converge.*")
+
+            for C in Cs:
+                probe = LogisticRegression(
+                    C=C,
+                    max_iter=max_iter,
+                    random_state=random_state,
+                    class_weight="balanced",
+                    solver="saga",
+                    tol=1e-3,
+                    n_jobs=-1,
+                )
+                probe.fit(X_train_scaled, y_train)
+                val_pred = probe.predict(X_val_scaled)
+                val_acc = accuracy_score(y_val, val_pred)
+
+                if val_acc > best_val_score:
+                    best_val_score = val_acc
+                    best_C = C
+
+            final_probe = LogisticRegression(
+                C=best_C,
+                max_iter=max_iter * 2,
                 random_state=random_state,
                 class_weight="balanced",
                 solver="saga",
-                multi_class="multinomial",
-                tol=1e-3,
+                tol=1e-4,
                 n_jobs=-1,
             )
-            probe.fit(X_train_scaled, y_train)
-            val_pred = probe.predict(X_val_scaled)
-            val_acc = accuracy_score(y_val, val_pred)
+            final_probe.fit(X_train_scaled, y_train)
 
-            if val_acc > best_val_score:
-                best_val_score = val_acc
-                best_C = C
-
-        final_probe = LogisticRegression(
-            C=best_C,
-            max_iter=max_iter * 2,
-            random_state=random_state,
-            class_weight="balanced",
-            solver="saga",
-            multi_class="multinomial",
-            tol=1e-4,
-            n_jobs=-1,
-        )
-        final_probe.fit(X_train_scaled, y_train)
-
-    y_train_pred = final_probe.predict(X_train_scaled)
-    y_val_pred = final_probe.predict(X_val_scaled)
-    y_test_pred = final_probe.predict(X_test_scaled)
-    y_test_prob = final_probe.predict_proba(X_test_scaled)
+        y_train_pred = final_probe.predict(X_train_scaled)
+        y_val_pred = final_probe.predict(X_val_scaled)
+        y_test_pred = final_probe.predict(X_test_scaled)
+        y_test_prob = final_probe.predict_proba(X_test_scaled)
 
     train_acc = accuracy_score(y_train, y_train_pred)
     val_acc = accuracy_score(y_val, y_val_pred)
@@ -389,6 +460,7 @@ def probe_layer_3class(
     split_indices: Dict[str, np.ndarray],
     feature_name: str = "target",
     logger: logging.Logger = None,
+    use_gpu: bool = True,
 ) -> ProbeResult:
     X = activations[:, layer, :]
     y = labels.astype(float)
@@ -442,6 +514,7 @@ def probe_layer_3class(
         X_train, y_train.astype(int),
         X_val, y_val.astype(int),
         X_test, y_test.astype(int),
+        use_gpu=use_gpu,
     )
 
     return ProbeResult(
@@ -480,6 +553,7 @@ def run_3label_probing(
     features_to_probe: List[str] = None,
     output_dir: Path = None,
     logger: logging.Logger = None,
+    use_gpu: bool = True,
 ) -> ProbeExperiment:
     n_samples, n_layers, d_model = activations.shape
 
@@ -536,6 +610,7 @@ def run_3label_probing(
                 split_indices=split_indices,
                 feature_name=feature,
                 logger=logger,
+                use_gpu=use_gpu,
             )
             results.append(result)
 
@@ -649,6 +724,11 @@ def main():
         "--token-position", type=int, default=None,
         help="Token position used for extraction (default: -1, last token)",
     )
+    parser.add_argument(
+        "--no-gpu",
+        action="store_true",
+        help="Disable cuML GPU acceleration (force sklearn CPU).",
+    )
 
     args = parser.parse_args()
 
@@ -657,6 +737,14 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     logger = setup_logging(output_dir, args.model, args.condition)
+
+    use_gpu = (not args.no_gpu) and CUML_AVAILABLE
+    if not CUML_AVAILABLE:
+        logger.info("cuML not available: using sklearn CPU.")
+    elif args.no_gpu:
+        logger.info("GPU disabled via --no-gpu: using sklearn CPU.")
+    else:
+        logger.info("Using cuML GPU acceleration for 3-class probes.")
 
     token_position = args.token_position if args.token_position is not None else -1
     activation_path = get_activation_path(ACTIVATIONS_DIR, args.model, args.condition, token_position=token_position)
@@ -721,6 +809,7 @@ def main():
         features_to_probe=args.features,
         output_dir=output_dir,
         logger=logger,
+        use_gpu=use_gpu,
     )
 
     tag = f"3label_t{args.threshold}"
