@@ -19,3 +19,4 @@ llm_eval_mutual_funds/venv/
 llm_eval_mutual_funds/data/old_probe_results/
 llm_eval_mutual_funds/generate_presentation.py
 llm_eval_mutual_funds/presentation_outline.md
+.cursor/settings.json
