@@ -20,3 +20,7 @@ llm_eval_mutual_funds/data/old_probe_results/
 llm_eval_mutual_funds/generate_presentation.py
 llm_eval_mutual_funds/presentation_outline.md
 .cursor/settings.json
+.venv_batch/
+presentation/
+batch_compare_2_run.log
+LLM_Mutual_Fund_Interpretability_Presentation.pptx
