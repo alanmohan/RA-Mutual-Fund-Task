@@ -24,3 +24,5 @@ llm_eval_mutual_funds/presentation_outline.md
 presentation/
 batch_compare_2_run.log
 LLM_Mutual_Fund_Interpretability_Presentation.pptx
+llm_eval_mutual_funds/lrp_attributions/results_old
+.claude/settings.json
